@@ -1,0 +1,5 @@
+{
+  "name": "ShopOS",
+  "description": "Mobile-first inventory management system for auto parts shops, integrated with Google Sheets.",
+  "requestFramePermissions": []
+}

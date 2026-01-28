@@ -1,0 +1,151 @@
+const express = require('express');
+const { v4: uuidv4 } = require('uuid');
+const sheets = require('../services/sheets');
+const { authenticateSession } = require('../middleware/auth');
+
+const router = express.Router();
+const TABS = sheets.TABS;
+
+router.use(authenticateSession);
+
+/**
+ * POST /api/sales
+ * Record a new sale
+ */
+router.post('/', async (req, res) => {
+    try {
+        const { batch_id, date, items, total_kes, payment_method, customer_name, notes } = req.body;
+
+        if (!batch_id) {
+            return res.status(400).json({ error: 'Receipt number (batch_id) is required' });
+        }
+
+        // Check for duplicate receipt number
+        const existingSale = await sheets.findRow(TABS.SALES, { Batch_ID: batch_id });
+        if (existingSale) {
+            return res.status(409).json({ error: 'Receipt number already exists' });
+        }
+
+        const saleDate = date || new Date().toISOString();
+
+        // Create sale record
+        const saleRecord = {
+            Date: saleDate,
+            Batch_ID: batch_id,
+            Items_JSON: JSON.stringify(items || []),
+            Total_KES: total_kes || 0,
+            Payment_Method: payment_method || 'Cash',
+            Customer_Name: customer_name || '',
+            Notes: notes || '',
+            Sold_By: req.user.username
+        };
+
+        await sheets.addRow(TABS.SALES, saleRecord);
+
+        // Deduct stock for each item
+        if (items && items.length > 0) {
+            for (const item of items) {
+                try {
+                    const inventoryItem = await sheets.findRow(TABS.INVENTORY, { UUID: item.uuid });
+                    if (inventoryItem) {
+                        const currentStock = parseInt(inventoryItem.Stock_Qty) || 0;
+                        const newStock = Math.max(0, currentStock - item.qty);
+
+                        await sheets.updateRow(TABS.INVENTORY, { UUID: item.uuid }, {
+                            Stock_Qty: newStock,
+                            Last_Updated: new Date().toISOString(),
+                            Updated_By: req.user.username
+                        });
+
+                        // Audit stock deduction
+                        await logAudit(req.user.username, 'SALE_STOCK_DEDUCTION', 'INVENTORY', item.uuid,
+                            { stock_qty: currentStock },
+                            { stock_qty: newStock, sale_batch: batch_id },
+                            req
+                        );
+                    }
+                } catch (itemError) {
+                    console.error(`Failed to deduct stock for ${item.uuid}:`, itemError);
+                }
+            }
+        }
+
+        // Audit the sale
+        await logAudit(req.user.username, 'SALE_RECORDED', 'SALES', batch_id, null, saleRecord, req);
+
+        res.status(201).json({
+            message: 'Sale recorded successfully',
+            batch_id: batch_id,
+            total: total_kes
+        });
+    } catch (error) {
+        console.error('Create sale error:', error);
+        res.status(500).json({ error: 'Failed to record sale' });
+    }
+});
+
+/**
+ * GET /api/sales
+ * Get all sales with optional filters
+ */
+router.get('/', async (req, res) => {
+    try {
+        const { from, to, payment_method } = req.query;
+        let sales = await sheets.getAllRows(TABS.SALES);
+
+        // Filter by date range
+        if (from) {
+            const fromDate = new Date(from);
+            sales = sales.filter(s => new Date(s.Date) >= fromDate);
+        }
+        if (to) {
+            const toDate = new Date(to);
+            sales = sales.filter(s => new Date(s.Date) <= toDate);
+        }
+
+        // Filter by payment method
+        if (payment_method && payment_method !== 'All') {
+            sales = sales.filter(s => s.Payment_Method === payment_method);
+        }
+
+        // Transform for frontend
+        const transformed = sales.map(s => ({
+            date: s.Date,
+            batch_id: s.Batch_ID,
+            items: JSON.parse(s.Items_JSON || '[]'),
+            total_kes: parseFloat(s.Total_KES) || 0,
+            payment_method: s.Payment_Method,
+            customer_name: s.Customer_Name,
+            notes: s.Notes,
+            sold_by: s.Sold_By
+        }));
+
+        res.json(transformed);
+    } catch (error) {
+        console.error('Get sales error:', error);
+        res.status(500).json({ error: 'Failed to fetch sales' });
+    }
+});
+
+/**
+ * Helper: Log to audit trail
+ */
+async function logAudit(user, action, entityType, entityId, oldValue, newValue, req) {
+    try {
+        await sheets.addRow(TABS.AUDIT_LOG, {
+            Timestamp: new Date().toISOString(),
+            User: user,
+            Action: action,
+            Entity_Type: entityType,
+            Entity_ID: entityId,
+            Old_Value: oldValue ? JSON.stringify(oldValue) : '',
+            New_Value: newValue ? JSON.stringify(newValue) : '',
+            IP_Address: req?.ip || '',
+            Device_Info: (req?.headers?.['user-agent'] || '').substring(0, 200)
+        });
+    } catch (error) {
+        console.error('Audit log error:', error);
+    }
+}
+
+module.exports = router;
