@@ -79,12 +79,14 @@ const Inventory: React.FC = () => {
   };
 
   const handleDelete = async (uuid: string) => {
-    if (!confirm('Are you sure you want to delete this item?')) return;
+    if (!confirm('Are you sure you want to delete this item? This cannot be undone.')) return;
     try {
       await api.inventory.delete(uuid);
       await refreshInventory();
-    } catch (e) {
-      alert('Failed to delete item');
+    } catch (e: any) {
+      console.error('Delete failed:', e);
+      const message = e?.message || e?.error || 'Failed to delete item. Make sure you are logged in as admin.';
+      alert(message);
     }
   };
 
