@@ -1,0 +1,21 @@
+# Render Blueprint - https://render.com/docs/blueprint-spec
+services:
+  # Backend API
+  - type: web
+    name: shopos-backend
+    runtime: node
+    rootDir: server
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: GOOGLE_SPREADSHEET_ID
+        sync: false  # Set manually in Render dashboard
+      - key: GOOGLE_SERVICE_ACCOUNT_EMAIL
+        sync: false
+      - key: GOOGLE_PRIVATE_KEY
+        sync: false
+      - key: ALLOWED_ORIGINS
+        sync: false  # Set to your frontend URL
+    healthCheckPath: /api/health
