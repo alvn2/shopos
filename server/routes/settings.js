@@ -1,19 +1,29 @@
 const express = require('express');
 const bcrypt = require('bcryptjs');
 const sheets = require('../services/sheets');
+const cache = require('../services/cache');
 const { authenticateSession, requireAdmin } = require('../middleware/auth');
 
 const router = express.Router();
 const TABS = sheets.TABS;
+const SETTINGS_CACHE_KEY = 'settings:all';
+const SETTINGS_CACHE_TTL = 60000; // 60 seconds (settings change rarely)
 
 router.use(authenticateSession);
 
 /**
  * GET /api/settings
- * Get all settings as key-value object
+ * Get all settings as key-value object (cached)
  */
 router.get('/', async (req, res) => {
     try {
+        // Check cache first
+        const cached = cache.get(SETTINGS_CACHE_KEY);
+        if (cached) {
+            res.set('X-Cache', 'HIT');
+            return res.json(cached);
+        }
+
         const settingsRows = await sheets.getAllRows(TABS.SETTINGS);
 
         const settings = {};
@@ -26,11 +36,16 @@ router.get('/', async (req, res) => {
         });
 
         // Map to frontend expected format
-        res.json({
+        const result = {
             aed_rate: parseFloat(settings.aed_rate || settings.aed_exchange_rate || 36.5),
             conversion_percent: parseFloat(settings.conversion_percent || 13),
             default_min_stock: parseInt(settings.default_min_stock || 5)
-        });
+        };
+
+        // Cache the result
+        cache.set(SETTINGS_CACHE_KEY, result, SETTINGS_CACHE_TTL);
+        res.set('X-Cache', 'MISS');
+        res.json(result);
     } catch (error) {
         console.error('Get settings error:', error);
         res.status(500).json({ error: 'Failed to fetch settings' });
@@ -65,6 +80,9 @@ router.put('/', requireAdmin, async (req, res) => {
                 });
             }
         }
+
+        // Invalidate settings cache
+        cache.invalidate(SETTINGS_CACHE_KEY);
 
         await logAudit(req.user.username, 'SETTINGS_UPDATED', 'SETTINGS', 'all', null, updates, req);
         res.json({

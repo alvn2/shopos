@@ -1,20 +1,30 @@
 const express = require('express');
 const { v4: uuidv4 } = require('uuid');
 const sheets = require('../services/sheets');
+const cache = require('../services/cache');
 const { authenticateSession, requireAdmin } = require('../middleware/auth');
 
 const router = express.Router();
 const TABS = sheets.TABS;
+const CACHE_KEY = 'inventory:all';
+const CACHE_TTL = 30000; // 30 seconds
 
 // All inventory routes require authentication
 router.use(authenticateSession);
 
 /**
  * GET /api/inventory
- * Get all inventory items
+ * Get all inventory items (with caching)
  */
 router.get('/', async (req, res) => {
     try {
+        // Check cache first
+        const cached = cache.get(CACHE_KEY);
+        if (cached) {
+            res.set('X-Cache', 'HIT');
+            return res.json(cached);
+        }
+
         const items = await sheets.getAllRows(TABS.INVENTORY);
 
         // Transform to camelCase for frontend
@@ -31,6 +41,9 @@ router.get('/', async (req, res) => {
             updated_by: item.Updated_By
         }));
 
+        // Cache the result
+        cache.set(CACHE_KEY, transformed, CACHE_TTL);
+        res.set('X-Cache', 'MISS');
         res.json(transformed);
     } catch (error) {
         console.error('Get inventory error:', error);
@@ -65,6 +78,9 @@ router.post('/', requireAdmin, async (req, res) => {
         };
 
         await sheets.addRow(TABS.INVENTORY, newItem);
+
+        // Invalidate cache
+        cache.invalidate(CACHE_KEY);
 
         // Audit log
         await logAudit(req.user.username, 'INVENTORY_CREATE', 'INVENTORY', newItem.UUID, null, newItem, req);
@@ -117,6 +133,9 @@ const updateSingleItem = async (req, res) => {
         if (updates.min_stock !== undefined) sheetUpdates.Min_Stock = updates.min_stock;
 
         await sheets.updateRow(TABS.INVENTORY, { UUID: uuid }, sheetUpdates);
+
+        // Invalidate cache
+        cache.invalidate(CACHE_KEY);
 
         // Audit log
         await logAudit(req.user.username, 'INVENTORY_UPDATE', 'INVENTORY', uuid, currentItem, sheetUpdates, req);
@@ -171,6 +190,9 @@ const batchUpdate = async (req, res) => {
             }
         }
 
+        // Invalidate cache after batch update
+        cache.invalidate(CACHE_KEY);
+
         res.json({ message: `Updated ${successCount} items`, count: successCount, success: true });
     } catch (error) {
         console.error('Batch update error:', error);
@@ -202,6 +224,9 @@ router.delete('/:uuid', requireAdmin, async (req, res) => {
         }
 
         await sheets.deleteRow(TABS.INVENTORY, { UUID: uuid });
+
+        // Invalidate cache
+        cache.invalidate(CACHE_KEY);
 
         // Audit log
         await logAudit(req.user.username, 'INVENTORY_DELETE', 'INVENTORY', uuid, currentItem, null, req);
