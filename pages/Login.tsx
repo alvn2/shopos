@@ -39,8 +39,18 @@ const Login: React.FC = () => {
       const deviceInfo = getDeviceInfo();
       await login(username, password, deviceInfo);
       navigate('/');
-    } catch (err) {
-      setError('Invalid credentials or account disabled');
+    } catch (err: any) {
+      console.error('Login error:', err);
+      // Show specific error if available
+      if (err.message?.includes('Failed to fetch') || err.message?.includes('NetworkError')) {
+        setError('Network error - check your internet connection');
+      } else if (err.message?.includes('CORS')) {
+        setError('Connection blocked - please try again');
+      } else if (err.message) {
+        setError(err.message);
+      } else {
+        setError('Invalid credentials or account disabled');
+      }
     } finally {
       setLoading(false);
     }
@@ -75,7 +85,7 @@ const Login: React.FC = () => {
               required
             />
           </div>
-          
+
           <div>
             <label className="block text-sm font-medium text-brand-100 mb-2">Password</label>
             <input
@@ -96,7 +106,7 @@ const Login: React.FC = () => {
             {loading ? <Loader2 className="animate-spin mr-2" size={20} /> : 'Sign In'}
           </button>
         </form>
-        
+
         <div className="mt-8 text-center text-xs text-brand-200">
           <p>Mock Credentials for Demo:</p>
           <p>Admin: admin / admin</p>

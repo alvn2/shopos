@@ -14,17 +14,39 @@ const app = express();
 app.set('trust proxy', 1);
 
 // CORS configuration - MUST be before helmet
-// In development, allow all origins. In production, use ALLOWED_ORIGINS env var.
-const corsOrigin = process.env.NODE_ENV === 'production'
-    ? (process.env.ALLOWED_ORIGINS ? process.env.ALLOWED_ORIGINS.split(',') : false)
-    : true;
+// Parse allowed origins from env
+const allowedOrigins = process.env.ALLOWED_ORIGINS
+    ? process.env.ALLOWED_ORIGINS.split(',').map(o => o.trim())
+    : ['http://localhost:3000', 'http://localhost:3001', 'http://localhost:5173'];
 
-app.use(cors({
-    origin: corsOrigin,
+// Dynamic origin validation
+const corsOptions = {
+    origin: function (origin, callback) {
+        // Allow requests with no origin (mobile apps, curl, same-origin)
+        if (!origin) {
+            return callback(null, true);
+        }
+
+        // In development, allow all
+        if (process.env.NODE_ENV !== 'production') {
+            return callback(null, true);
+        }
+
+        // In production, check against allowed origins
+        if (allowedOrigins.some(allowed => origin === allowed || origin.endsWith('.vercel.app'))) {
+            return callback(null, true);
+        }
+
+        console.warn(`[CORS] Blocked origin: ${origin}`);
+        callback(new Error('Not allowed by CORS'));
+    },
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'X-Session-Id']
-}));
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Session-Id'],
+    exposedHeaders: ['X-Cache'] // Allow frontend to see cache status
+};
+
+app.use(cors(corsOptions));
 
 // Security middleware
 app.use(helmet());
