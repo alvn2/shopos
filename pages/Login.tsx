@@ -1,15 +1,42 @@
 import React, { useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
-import { Loader2, Lock } from 'lucide-react';
+import { Loader2, Lock, Wifi, WifiOff } from 'lucide-react';
 
 const Login: React.FC = () => {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [connectionStatus, setConnectionStatus] = useState<'idle' | 'testing' | 'ok' | 'error'>('idle');
+  const [connectionDetails, setConnectionDetails] = useState('');
   const { login } = useAuth();
   const navigate = useNavigate();
+
+  // Get API URL for testing
+  const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+
+  const testConnection = async () => {
+    setConnectionStatus('testing');
+    setConnectionDetails('');
+    try {
+      const response = await fetch(`${apiUrl}/health`, {
+        method: 'GET',
+        headers: { 'Accept': 'application/json' }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setConnectionStatus('ok');
+        setConnectionDetails(`Connected to backend (${data.sheets_title || 'OK'})`);
+      } else {
+        setConnectionStatus('error');
+        setConnectionDetails(`Server error: ${response.status}`);
+      }
+    } catch (err: any) {
+      setConnectionStatus('error');
+      setConnectionDetails(`${err.message || 'Cannot reach server'} - API: ${apiUrl}`);
+    }
+  };
 
   const getDeviceInfo = () => {
     const ua = navigator.userAgent;
@@ -111,6 +138,31 @@ const Login: React.FC = () => {
           <p>Mock Credentials for Demo:</p>
           <p>Admin: admin / admin</p>
           <p>Counter: counter / counter</p>
+        </div>
+
+        {/* Connection Test - for debugging */}
+        <div className="mt-6 pt-4 border-t border-white/10">
+          <button
+            type="button"
+            onClick={testConnection}
+            disabled={connectionStatus === 'testing'}
+            className="w-full py-2 px-3 bg-white/10 text-white/70 text-sm rounded-lg hover:bg-white/20 transition-all flex items-center justify-center gap-2"
+          >
+            {connectionStatus === 'testing' ? (
+              <><Loader2 className="animate-spin" size={16} /> Testing...</>
+            ) : connectionStatus === 'ok' ? (
+              <><Wifi size={16} className="text-green-400" /> Connected</>
+            ) : connectionStatus === 'error' ? (
+              <><WifiOff size={16} className="text-red-400" /> Connection Error</>
+            ) : (
+              <>Test Connection</>
+            )}
+          </button>
+          {connectionDetails && (
+            <p className={`mt-2 text-xs text-center ${connectionStatus === 'ok' ? 'text-green-300' : 'text-red-300'}`}>
+              {connectionDetails}
+            </p>
+          )}
         </div>
       </div>
     </div>
