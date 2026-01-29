@@ -27,8 +27,11 @@ router.get('/', async (req, res) => {
 
         const items = await sheets.getAllRows(TABS.INVENTORY);
 
+        // Filter out soft-deleted items
+        const activeItems = items.filter(item => item.Is_Deleted !== 'TRUE');
+
         // Transform to camelCase for frontend
-        const transformed = items.map(item => ({
+        const transformed = activeItems.map(item => ({
             uuid: item.UUID,
             part_number: item.Part_Number,
             name: item.Name,
@@ -212,7 +215,8 @@ router.put('/:uuid', updateSingleItem);
 
 /**
  * DELETE /api/inventory/:uuid
- * Delete an inventory item (admin only)
+ * Soft-delete an inventory item (admin only)
+ * Item is marked as deleted but NOT permanently removed for data protection
  */
 router.delete('/:uuid', requireAdmin, async (req, res) => {
     try {
@@ -223,15 +227,23 @@ router.delete('/:uuid', requireAdmin, async (req, res) => {
             return res.status(404).json({ error: 'Item not found' });
         }
 
-        await sheets.deleteRow(TABS.INVENTORY, { UUID: uuid });
+        // Soft delete: Mark as deleted instead of permanent deletion
+        // This preserves data history and allows recovery if needed
+        await sheets.updateRow(TABS.INVENTORY, { UUID: uuid }, {
+            Name: `[DELETED] ${currentItem.Name}`,
+            Stock_Qty: 0,
+            Is_Deleted: 'TRUE',
+            Deleted_At: new Date().toISOString(),
+            Deleted_By: req.user.username
+        });
 
         // Invalidate cache
         cache.invalidate(CACHE_KEY);
 
-        // Audit log
-        await logAudit(req.user.username, 'INVENTORY_DELETE', 'INVENTORY', uuid, currentItem, null, req);
+        // Audit log with full old data for recovery purposes
+        await logAudit(req.user.username, 'INVENTORY_SOFT_DELETE', 'INVENTORY', uuid, currentItem, { deleted: true }, req);
 
-        res.json({ message: 'Item deleted', uuid });
+        res.json({ message: 'Item marked as deleted (recoverable via Google Sheets)', uuid });
     } catch (error) {
         console.error('Delete inventory error:', error);
         res.status(500).json({ error: 'Failed to delete item' });

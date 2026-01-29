@@ -134,36 +134,20 @@ const Login: React.FC = () => {
           </button>
         </form>
 
-        <div className="mt-8 text-center text-xs text-brand-200">
-          <p>Mock Credentials for Demo:</p>
-          <p>Admin: admin / admin</p>
-          <p>Counter: counter / counter</p>
-        </div>
-
-        {/* Connection Test - for debugging */}
-        <div className="mt-6 pt-4 border-t border-white/10">
-          <button
-            type="button"
-            onClick={testConnection}
-            disabled={connectionStatus === 'testing'}
-            className="w-full py-2 px-3 bg-white/10 text-white/70 text-sm rounded-lg hover:bg-white/20 transition-all flex items-center justify-center gap-2"
-          >
-            {connectionStatus === 'testing' ? (
-              <><Loader2 className="animate-spin" size={16} /> Testing...</>
-            ) : connectionStatus === 'ok' ? (
-              <><Wifi size={16} className="text-green-400" /> Connected</>
-            ) : connectionStatus === 'error' ? (
-              <><WifiOff size={16} className="text-red-400" /> Connection Error</>
-            ) : (
-              <>Test Connection</>
-            )}
-          </button>
-          {connectionDetails && (
-            <p className={`mt-2 text-xs text-center ${connectionStatus === 'ok' ? 'text-green-300' : 'text-red-300'}`}>
-              {connectionDetails}
-            </p>
-          )}
-        </div>
+        {/* Connection Status - only show if there's an issue */}
+        {connectionStatus === 'error' && connectionDetails && (
+          <div className="mt-4 text-center">
+            <p className="text-xs text-red-300">{connectionDetails}</p>
+            <button
+              type="button"
+              onClick={testConnection}
+              disabled={connectionStatus === 'testing'}
+              className="mt-2 text-xs text-white/50 hover:text-white/70 underline"
+            >
+              Retry connection
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );

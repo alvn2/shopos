@@ -379,21 +379,89 @@ const SettingsPage: React.FC = () => {
         {/* === SYSTEM TAB === */}
         {activeTab === 'system' && (
           <div className="space-y-4">
+            {/* Data Storage Info */}
             <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-5">
-              <h3 className="font-semibold text-gray-900 dark:text-white mb-4">Data Management</h3>
+              <h3 className="font-semibold text-gray-900 dark:text-white mb-4">Data Storage</h3>
+              <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-4 mb-4">
+                <div className="flex items-center gap-2 text-green-700 dark:text-green-300 font-medium mb-2">
+                  <Check size={18} />
+                  Cloud Backup Enabled
+                </div>
+                <p className="text-sm text-green-600 dark:text-green-400">
+                  All data is securely stored in Google Sheets and automatically synced. Your inventory, sales, and user data are protected in the cloud.
+                </p>
+              </div>
+              <div className="text-sm text-gray-500 dark:text-gray-400 space-y-2">
+                <p><strong>Database:</strong> Google Sheets (ShopOS_DB)</p>
+                <p><strong>Backup:</strong> Google automatically maintains version history. You can view/restore previous versions in Google Sheets.</p>
+                <p><strong>Audit Trail:</strong> All changes are logged with timestamps and user info.</p>
+              </div>
+            </div>
+
+            {/* Export Data */}
+            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-5">
+              <h3 className="font-semibold text-gray-900 dark:text-white mb-4">Export Data</h3>
               <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
-                All data is stored locally in your browser. Clearing browser data will erase all ShopOS data.
+                Download your data for offline backup or reporting.
+              </p>
+              <div className="space-y-3">
+                <button
+                  onClick={async () => {
+                    try {
+                      const inventory = await api.inventory.getAll();
+                      const blob = new Blob([JSON.stringify(inventory, null, 2)], { type: 'application/json' });
+                      const url = URL.createObjectURL(blob);
+                      const a = document.createElement('a');
+                      a.href = url;
+                      a.download = `shopos-inventory-${new Date().toISOString().split('T')[0]}.json`;
+                      a.click();
+                      setMessage({ type: 'success', text: 'Inventory exported!' });
+                    } catch (e) {
+                      setMessage({ type: 'error', text: 'Export failed' });
+                    }
+                  }}
+                  className="w-full py-3 bg-brand-100 dark:bg-brand-900/30 text-brand-700 dark:text-brand-300 rounded-lg font-medium hover:bg-brand-200 dark:hover:bg-brand-900/50"
+                >
+                  Export Inventory (JSON)
+                </button>
+                <button
+                  onClick={async () => {
+                    try {
+                      const sales = await api.sales.getAll();
+                      const blob = new Blob([JSON.stringify(sales, null, 2)], { type: 'application/json' });
+                      const url = URL.createObjectURL(blob);
+                      const a = document.createElement('a');
+                      a.href = url;
+                      a.download = `shopos-sales-${new Date().toISOString().split('T')[0]}.json`;
+                      a.click();
+                      setMessage({ type: 'success', text: 'Sales exported!' });
+                    } catch (e) {
+                      setMessage({ type: 'error', text: 'Export failed' });
+                    }
+                  }}
+                  className="w-full py-3 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg font-medium hover:bg-gray-200 dark:hover:bg-gray-600"
+                >
+                  Export Sales History (JSON)
+                </button>
+              </div>
+            </div>
+
+            {/* Clear Local Cache */}
+            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-5">
+              <h3 className="font-semibold text-gray-900 dark:text-white mb-4">Local Cache</h3>
+              <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+                Clear locally cached data. This will NOT delete your actual data (which is in Google Sheets).
               </p>
               <button
                 onClick={() => {
-                  if (confirm('This will reset all data to defaults. Continue?')) {
+                  if (confirm('Clear local cache? You will need to login again. Your actual data is safe in Google Sheets.')) {
                     localStorage.clear();
                     window.location.reload();
                   }
                 }}
-                className="w-full py-3 bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 rounded-lg font-medium"
+                className="w-full py-3 bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300 rounded-lg font-medium"
               >
-                Reset All Data to Defaults
+                Clear Local Cache & Logout
               </button>
             </div>
           </div>
