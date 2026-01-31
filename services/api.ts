@@ -15,6 +15,14 @@ import { InventoryItem, LoginResponse, SaleRecord, Settings, User, UserRole, Ses
 // Backend API URL - defaults to localhost in development
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
+// Retry configuration
+const RETRY_CONFIG = {
+  maxRetries: 3,
+  baseDelay: 1000, // 1 second
+  maxDelay: 10000, // 10 seconds
+  retryStatusCodes: [408, 429, 500, 502, 503, 504] // Status codes to retry
+};
+
 // Storage keys for offline cache
 const CACHE_KEYS = {
   INVENTORY: 'shopos_cache_inventory',
@@ -125,7 +133,30 @@ const syncQueue = {
 };
 
 // ============================================================================
-// HTTP CLIENT with offline fallback
+// UTILITY FUNCTIONS
+// ============================================================================
+
+/**
+ * Sleep for a given number of milliseconds
+ */
+function sleep(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+/**
+ * Calculate exponential backoff delay with jitter
+ */
+function getBackoffDelay(attempt: number): number {
+  const delay = Math.min(
+    RETRY_CONFIG.baseDelay * Math.pow(2, attempt),
+    RETRY_CONFIG.maxDelay
+  );
+  // Add jitter (±20%)
+  return delay * (0.8 + Math.random() * 0.4);
+}
+
+// ============================================================================
+// HTTP CLIENT with offline fallback and retry logic
 // ============================================================================
 
 async function fetchAPI<T>(
@@ -144,35 +175,69 @@ async function fetchAPI<T>(
     headers['Authorization'] = `Bearer ${sessionId}`;
   }
 
-  try {
-    const response = await fetch(`${API_BASE}${endpoint}`, {
-      ...options,
-      headers,
-      credentials: 'include'
-    });
+  let lastError: Error | null = null;
 
-    if (!response.ok) {
-      if (response.status === 401) {
-        // Global handler for invalid session
-        storage.removeItem(CACHE_KEYS.SESSION);
-        storage.removeItem(CACHE_KEYS.USER);
-        window.dispatchEvent(new Event('shopos:logout'));
-      }
-      const error = await response.json().catch(() => ({ error: 'Request failed' }));
-      throw new Error(error.error || `HTTP ${response.status}`);
-    }
+  for (let attempt = 0; attempt < RETRY_CONFIG.maxRetries; attempt++) {
+    try {
+      const response = await fetch(`${API_BASE}${endpoint}`, {
+        ...options,
+        headers,
+        credentials: 'include'
+      });
 
-    return response.json();
-  } catch (error: any) {
-    // Network error - we're offline
-    if (error.message === 'Failed to fetch' || !navigator.onLine) {
-      console.warn(`[Offline] ${endpoint} - using cache`);
-      if (offlineFallback) {
-        return offlineFallback();
+      // Check if we should retry based on status code
+      if (!response.ok) {
+        if (response.status === 401) {
+          // Global handler for invalid session - don't retry
+          storage.removeItem(CACHE_KEYS.SESSION);
+          storage.removeItem(CACHE_KEYS.USER);
+          window.dispatchEvent(new Event('shopos:logout'));
+          const error = await response.json().catch(() => ({ error: 'Session expired' }));
+          throw new Error(error.error || 'Session expired');
+        }
+
+        // Check if this status code should be retried
+        if (RETRY_CONFIG.retryStatusCodes.includes(response.status) && attempt < RETRY_CONFIG.maxRetries - 1) {
+          const delay = getBackoffDelay(attempt);
+          console.warn(`[API] Request failed with ${response.status}, retrying in ${Math.round(delay)}ms (attempt ${attempt + 1}/${RETRY_CONFIG.maxRetries})`);
+          await sleep(delay);
+          continue;
+        }
+
+        const error = await response.json().catch(() => ({ error: 'Request failed' }));
+        throw new Error(error.error || `HTTP ${response.status}`);
+      }
+
+      return response.json();
+    } catch (error: any) {
+      lastError = error;
+
+      // Network error - we're offline
+      if (error.message === 'Failed to fetch' || !navigator.onLine) {
+        console.warn(`[Offline] ${endpoint} - using cache`);
+        if (offlineFallback) {
+          return offlineFallback();
+        }
+        throw error;
+      }
+
+      // Don't retry if it's not a retryable error
+      if (error.message?.includes('Session expired') || error.message?.includes('401')) {
+        throw error;
+      }
+
+      // Retry for network-related errors
+      if (attempt < RETRY_CONFIG.maxRetries - 1) {
+        const delay = getBackoffDelay(attempt);
+        console.warn(`[API] Request failed, retrying in ${Math.round(delay)}ms (attempt ${attempt + 1}/${RETRY_CONFIG.maxRetries}):`, error.message);
+        await sleep(delay);
+        continue;
       }
     }
-    throw error;
   }
+
+  // All retries exhausted
+  throw lastError || new Error(`Request to ${endpoint} failed after ${RETRY_CONFIG.maxRetries} attempts`);
 }
 
 // ============================================================================
@@ -368,7 +433,7 @@ export const api = {
       return { success: true };
     },
 
-    updateBatch: async (updates: Array<{ uuid: string; stock_qty: number }>): Promise<{ success: boolean; count: number }> => {
+    updateBatch: async (updates: Array<{ uuid: string } & Partial<InventoryItem>>): Promise<{ success: boolean; count: number }> => {
       if (!navigator.onLine) {
         syncQueue.add({ endpoint: '/inventory/batch', method: 'PUT', body: updates });
         // Update local cache
@@ -376,8 +441,7 @@ export const api = {
         updates.forEach(update => {
           const index = items.findIndex(i => i.uuid === update.uuid);
           if (index !== -1) {
-            items[index].stock_qty = update.stock_qty;
-            items[index].last_updated = new Date().toISOString();
+            items[index] = { ...items[index], ...update, last_updated: new Date().toISOString() };
           }
         });
         cache.inventory.set(items);
@@ -390,6 +454,19 @@ export const api = {
       });
 
       return { success: true, count: updates.length };
+    },
+
+    bulkImport: async (items: Array<Partial<InventoryItem>>, updateExisting = true): Promise<{
+      success: boolean;
+      created: number;
+      updated: number;
+      skipped: number;
+      errors: Array<{ index: number; part_number: string; error: string }>;
+    }> => {
+      return fetchAPI('/inventory/bulk-import', {
+        method: 'POST',
+        body: JSON.stringify({ items, update_existing: updateExisting })
+      });
     },
 
     delete: async (uuid: string): Promise<{ success: boolean }> => {

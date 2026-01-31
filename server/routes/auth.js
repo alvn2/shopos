@@ -3,6 +3,8 @@ const bcrypt = require('bcryptjs');
 const sheets = require('../services/sheets');
 const sessionService = require('../services/session');
 const { authenticateSession } = require('../middleware/auth');
+const { bruteForceProtection } = require('../middleware/security');
+const { validate } = require('../middleware/validation');
 
 const router = express.Router();
 const TABS = sheets.TABS;
@@ -11,7 +13,7 @@ const TABS = sheets.TABS;
  * POST /api/auth/login
  * Login with username and password
  */
-router.post('/login', async (req, res) => {
+router.post('/login', bruteForceProtection, validate('login', 'body'), async (req, res) => {
     try {
         let { username, password, device_info } = req.body;
 
@@ -29,24 +31,29 @@ router.post('/login', async (req, res) => {
         console.log(`[Auth] User found: ${!!user} (Role: ${user ? user.Role : 'N/A'})`);
 
         if (!user) {
-            // Log failed attempt
+            // Log failed attempt and track for brute-force protection
+            if (req.trackLoginFailure) req.trackLoginFailure();
             await logAudit(null, 'LOGIN_FAILED', 'AUTH', username, null, { reason: 'User not found' }, req);
             return res.status(401).json({ error: 'Invalid credentials' });
         }
 
         // Check if active
         if (user.Is_Active !== 'TRUE') {
+            if (req.trackLoginFailure) req.trackLoginFailure();
             await logAudit(username, 'LOGIN_FAILED', 'AUTH', username, null, { reason: 'Account disabled' }, req);
             return res.status(403).json({ error: 'Account disabled. Contact administrator.' });
         }
 
         // Verify password
         const isValid = await bcrypt.compare(password, user.Password_Hash);
-        console.log(`[Auth] Password valid: ${isValid}`);
         if (!isValid) {
+            if (req.trackLoginFailure) req.trackLoginFailure();
             await logAudit(username, 'LOGIN_FAILED', 'AUTH', username, null, { reason: 'Wrong password' }, req);
             return res.status(401).json({ error: 'Invalid credentials' });
         }
+
+        // Clear brute-force tracking on successful login
+        if (req.trackLoginSuccess) req.trackLoginSuccess();
 
         // Get IP and device info
         const ipAddress = req.ip || req.headers['x-forwarded-for'] || 'unknown';

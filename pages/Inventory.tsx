@@ -1,8 +1,9 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import Layout from '../components/common/Layout';
+import BulkImport from '../components/inventory/BulkImport';
 import { useInventory } from '../contexts/InventoryContext';
-import { InventoryItem, Settings } from '../types';
-import { Minus, Plus, Save, RotateCcw, Check, Package, Search, Trash2, Edit2, X, Calculator } from 'lucide-react';
+import { InventoryItem, PartMake, Settings } from '../types';
+import { Minus, Plus, Save, RotateCcw, Check, Package, Search, Trash2, Edit2, X, Calculator, Upload } from 'lucide-react';
 import { api } from '../services/api';
 
 const Inventory: React.FC = () => {
@@ -12,6 +13,7 @@ const Inventory: React.FC = () => {
   const [saving, setSaving] = useState(false);
   const [filter, setFilter] = useState<'all' | 'low' | 'out'>('all');
   const [searchTerm, setSearchTerm] = useState('');
+  const [showBulkImport, setShowBulkImport] = useState(false);
 
   // Settings from API
   const [settings, setSettings] = useState<Settings | null>(null);
@@ -24,7 +26,9 @@ const Inventory: React.FC = () => {
     part_number: '',
     name: '',
     tags: '',
+    make: 'Genuine' as PartMake,
     aed_buying_price: '',
+    ksh_buying_price: '',
     selling_price: '',
     min_stock: ''
   });
@@ -90,14 +94,15 @@ const Inventory: React.FC = () => {
     }
   };
 
-  // Edit Modal Functions
   const openEditModal = (item: InventoryItem) => {
     setEditingItem(item);
     setEditForm({
       part_number: item.part_number,
       name: item.name,
       tags: item.tags || '',
+      make: item.make || 'Genuine',
       aed_buying_price: item.aed_buying_price.toString(),
+      ksh_buying_price: (item.ksh_buying_price || 0).toString(),
       selling_price: item.selling_price.toString(),
       min_stock: item.min_stock.toString()
     });
@@ -105,7 +110,7 @@ const Inventory: React.FC = () => {
 
   const closeEditModal = () => {
     setEditingItem(null);
-    setEditForm({ part_number: '', name: '', tags: '', aed_buying_price: '', selling_price: '', min_stock: '' });
+    setEditForm({ part_number: '', name: '', tags: '', make: 'Genuine', aed_buying_price: '', ksh_buying_price: '', selling_price: '', min_stock: '' });
   };
 
   const handleEditSave = async () => {
@@ -118,7 +123,9 @@ const Inventory: React.FC = () => {
         part_number: editForm.part_number.trim().toUpperCase(),
         name: editForm.name.trim(),
         tags: editForm.tags.trim(),
+        make: editForm.make,
         aed_buying_price: parseFloat(editForm.aed_buying_price) || 0,
+        ksh_buying_price: parseFloat(editForm.ksh_buying_price) || 0,
         selling_price: parseFloat(editForm.selling_price) || 0,
         min_stock: parseInt(editForm.min_stock) || 5
       }]);
@@ -165,11 +172,20 @@ const Inventory: React.FC = () => {
         </div>
 
         {/* Page Header */}
-        <div className="mb-6">
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Inventory</h1>
-          <p className="text-gray-500 dark:text-gray-400 mt-1">
-            {items.length} items • {lowStockCount} low stock • {outOfStockCount} out of stock
-          </p>
+        <div className="mb-6 flex items-start justify-between">
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Inventory</h1>
+            <p className="text-gray-500 dark:text-gray-400 mt-1">
+              {items.length} items • {lowStockCount} low stock • {outOfStockCount} out of stock
+            </p>
+          </div>
+          <button
+            onClick={() => setShowBulkImport(true)}
+            className="flex items-center gap-2 px-4 py-2 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 font-medium text-sm"
+          >
+            <Upload size={18} />
+            Import
+          </button>
         </div>
 
         {/* Search & Filters */}
@@ -236,6 +252,11 @@ const Inventory: React.FC = () => {
                         )}
                         {item.stock_qty > 0 && item.stock_qty <= item.min_stock && (
                           <span className="text-xs font-medium bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300 px-2 py-0.5 rounded">LOW</span>
+                        )}
+                        {item.make && item.make !== 'Genuine' && (
+                          <span className={`text-xs font-medium px-2 py-0.5 rounded ${item.make === 'Japan' ? 'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300' : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300'}`}>
+                            {item.make}
+                          </span>
                         )}
                         {isModified && (
                           <span className="text-xs font-medium bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 px-2 py-0.5 rounded">Modified</span>
@@ -386,6 +407,21 @@ const Inventory: React.FC = () => {
                 />
               </div>
 
+              {/* Make/Quality */}
+              <div>
+                <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1.5">Make / Quality</label>
+                <select
+                  value={editForm.make}
+                  onChange={e => setEditForm({ ...editForm, make: e.target.value as PartMake })}
+                  className="w-full p-2.5 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg text-sm dark:text-white"
+                >
+                  <option value="Genuine">Genuine (OEM)</option>
+                  <option value="Japan">Japan (High Quality)</option>
+                  <option value="Aftermarket">Aftermarket</option>
+                </select>
+                <p className="text-xs text-gray-400 mt-1">Parts with same number but different make are stored separately</p>
+              </div>
+
               {/* Pricing Section */}
               <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4 space-y-4">
                 <div className="text-xs font-semibold text-gray-600 dark:text-gray-300 flex items-center gap-2">
@@ -403,6 +439,20 @@ const Inventory: React.FC = () => {
                     onChange={e => setEditForm({ ...editForm, aed_buying_price: e.target.value })}
                     className="w-full p-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-lg text-sm dark:text-white"
                   />
+                </div>
+
+                {/* Buying Price KSH (Direct) */}
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">Buying Price (KSH) - Optional</label>
+                  <input
+                    type="number"
+                    step="1"
+                    value={editForm.ksh_buying_price}
+                    onChange={e => setEditForm({ ...editForm, ksh_buying_price: e.target.value })}
+                    placeholder="Direct KSH price if no AED"
+                    className="w-full p-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-lg text-sm dark:text-white"
+                  />
+                  <p className="text-xs text-gray-400 mt-1">Use when item was purchased directly in KSH</p>
                 </div>
 
                 {/* Calculated Landed Cost */}
@@ -470,6 +520,14 @@ const Inventory: React.FC = () => {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Bulk Import Modal */}
+      {showBulkImport && (
+        <BulkImport
+          onComplete={refreshInventory}
+          onClose={() => setShowBulkImport(false)}
+        />
       )}
     </Layout>
   );

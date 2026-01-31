@@ -2,6 +2,7 @@ const express = require('express');
 const { v4: uuidv4 } = require('uuid');
 const sheets = require('../services/sheets');
 const { authenticateSession } = require('../middleware/auth');
+const { validate } = require('../middleware/validation');
 
 const router = express.Router();
 const TABS = sheets.TABS;
@@ -86,11 +87,14 @@ router.post('/', async (req, res) => {
 
 /**
  * GET /api/sales
- * Get all sales with optional filters
+ * Get all sales with optional filters and pagination
  */
 router.get('/', async (req, res) => {
     try {
-        const { from, to, payment_method } = req.query;
+        const { from, to, payment_method, page, limit } = req.query;
+        const pageNum = parseInt(page) || 1;
+        const limitNum = parseInt(limit) || 0; // 0 means no pagination
+
         let sales = await sheets.getAllRows(TABS.SALES);
 
         // Filter by date range
@@ -108,6 +112,17 @@ router.get('/', async (req, res) => {
             sales = sales.filter(s => s.Payment_Method === payment_method);
         }
 
+        // Sort by date descending (most recent first)
+        sales.sort((a, b) => new Date(b.Date) - new Date(a.Date));
+
+        const total = sales.length;
+
+        // Pagination
+        if (limitNum > 0) {
+            const offset = (pageNum - 1) * limitNum;
+            sales = sales.slice(offset, offset + limitNum);
+        }
+
         // Transform for frontend
         const transformed = sales.map(s => ({
             date: s.Date,
@@ -119,6 +134,17 @@ router.get('/', async (req, res) => {
             notes: s.Notes,
             sold_by: s.Sold_By
         }));
+
+        // Return paginated or full response
+        if (limitNum > 0) {
+            return res.json({
+                sales: transformed,
+                total,
+                page: pageNum,
+                limit: limitNum,
+                total_pages: Math.ceil(total / limitNum)
+            });
+        }
 
         res.json(transformed);
     } catch (error) {

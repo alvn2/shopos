@@ -16,6 +16,64 @@ const TABS = {
     SETTINGS: 'SETTINGS'
 };
 
+// Retry configuration
+const RETRY_CONFIG = {
+    maxRetries: 3,
+    baseDelay: 1000, // 1 second
+    maxDelay: 10000  // 10 seconds
+};
+
+/**
+ * Sleep for a given number of milliseconds
+ */
+function sleep(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+/**
+ * Calculate exponential backoff delay
+ */
+function getBackoffDelay(attempt) {
+    const delay = Math.min(
+        RETRY_CONFIG.baseDelay * Math.pow(2, attempt),
+        RETRY_CONFIG.maxDelay
+    );
+    // Add jitter (±20%)
+    return delay * (0.8 + Math.random() * 0.4);
+}
+
+/**
+ * Retry a function with exponential backoff
+ */
+async function withRetry(fn, context = 'operation') {
+    let lastError;
+
+    for (let attempt = 0; attempt < RETRY_CONFIG.maxRetries; attempt++) {
+        try {
+            return await fn();
+        } catch (error) {
+            lastError = error;
+
+            // Don't retry on certain errors
+            if (error.code === 'INVALID_CREDENTIALS' ||
+                error.message?.includes('not found') ||
+                error.status === 404) {
+                throw error;
+            }
+
+            // Log retry attempt
+            if (attempt < RETRY_CONFIG.maxRetries - 1) {
+                const delay = getBackoffDelay(attempt);
+                console.warn(`[Sheets] ${context} failed (attempt ${attempt + 1}/${RETRY_CONFIG.maxRetries}), retrying in ${Math.round(delay)}ms:`, error.message);
+                await sleep(delay);
+            }
+        }
+    }
+
+    console.error(`[Sheets] ${context} failed after ${RETRY_CONFIG.maxRetries} attempts`);
+    throw lastError;
+}
+
 /**
  * Get authenticated Google Spreadsheet document
  */
@@ -25,19 +83,21 @@ async function getDocument() {
         return docCache;
     }
 
-    const serviceAccountAuth = new JWT({
-        email: process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL,
-        key: process.env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY.replace(/\\n/g, '\n'),
-        scopes: ['https://www.googleapis.com/auth/spreadsheets'],
-    });
+    return withRetry(async () => {
+        const serviceAccountAuth = new JWT({
+            email: process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL,
+            key: process.env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY.replace(/\\n/g, '\n'),
+            scopes: ['https://www.googleapis.com/auth/spreadsheets'],
+        });
 
-    const doc = new GoogleSpreadsheet(process.env.SHEET_ID, serviceAccountAuth);
-    await doc.loadInfo();
+        const doc = new GoogleSpreadsheet(process.env.SHEET_ID, serviceAccountAuth);
+        await doc.loadInfo();
 
-    docCache = doc;
-    cacheTime = now;
+        docCache = doc;
+        cacheTime = now;
 
-    return doc;
+        return doc;
+    }, 'getDocument');
 }
 
 /**

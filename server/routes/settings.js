@@ -3,6 +3,7 @@ const bcrypt = require('bcryptjs');
 const sheets = require('../services/sheets');
 const cache = require('../services/cache');
 const { authenticateSession, requireAdmin } = require('../middleware/auth');
+const { validatePasswordStrength } = require('../middleware/validation');
 
 const router = express.Router();
 const TABS = sheets.TABS;
@@ -133,8 +134,25 @@ router.post('/users', requireAdmin, async (req, res) => {
     try {
         const { username, password_hash, full_name, role } = req.body;
 
+        // Validate required fields
         if (!username || !password_hash || !full_name) {
             return res.status(400).json({ error: 'Username, password, and full name required' });
+        }
+
+        // Validate username format
+        if (!/^[a-zA-Z0-9_]{3,50}$/.test(username)) {
+            return res.status(400).json({
+                error: 'Username must be 3-50 characters containing only letters, numbers, and underscores'
+            });
+        }
+
+        // Validate password strength
+        const passwordCheck = validatePasswordStrength(password_hash);
+        if (!passwordCheck.valid) {
+            return res.status(400).json({
+                error: 'Password does not meet requirements',
+                details: passwordCheck.errors
+            });
         }
 
         // Check if user exists

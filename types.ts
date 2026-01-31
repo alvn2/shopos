@@ -24,12 +24,16 @@ export interface Session {
   is_current?: boolean; // Helper for UI
 }
 
+export type PartMake = 'Genuine' | 'Japan' | 'Aftermarket';
+
 export interface InventoryItem {
   uuid: string;
   part_number: string;
   name: string;
   tags: string; // comma-separated
+  make: PartMake;
   aed_buying_price: number;
+  ksh_buying_price: number; // Optional direct KSH buying price
   selling_price: number;
   stock_qty: number;
   min_stock: number;
