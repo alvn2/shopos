@@ -10,6 +10,21 @@ const TABS = sheets.TABS;
 const CACHE_KEY = 'inventory:all';
 const CACHE_TTL = 30000; // 30 seconds
 
+/**
+ * Helper to parse prices from Google Sheets that may have currency suffixes and commas
+ * Handles formats like: "2,000 KES", "2000", "2,000.50", "100 AED", etc.
+ */
+function parsePrice(value) {
+    if (value === null || value === undefined || value === '') return 0;
+    if (typeof value === 'number') return value;
+    // Remove currency suffixes (KES, AED, etc.), commas, and whitespace
+    const cleaned = String(value)
+        .replace(/\s*(KES|AED|KSH|USD|EUR)\s*/gi, '')
+        .replace(/,/g, '')
+        .trim();
+    return parseFloat(cleaned) || 0;
+}
+
 // All inventory routes require authentication
 router.use(authenticateSession);
 
@@ -69,9 +84,9 @@ router.get('/', async (req, res) => {
             name: item.Name,
             tags: item.Tags || '',
             make: item.Make || 'Genuine',
-            aed_buying_price: parseFloat(item.AED_Buying_Price) || 0,
-            ksh_buying_price: parseFloat(item.KSH_Buying_Price) || 0,
-            selling_price: parseFloat(item.Selling_Price) || 0,
+            aed_buying_price: parsePrice(item.AED_Buying_Price),
+            ksh_buying_price: parsePrice(item.KSH_Buying_Price),
+            selling_price: parsePrice(item.Selling_Price),
             stock_qty: parseInt(item.Stock_Qty) || 0,
             min_stock: parseInt(item.Min_Stock) || 5,
             last_updated: item.Last_Updated,
@@ -176,9 +191,9 @@ router.post('/', requireAdmin, validate('inventoryItem', 'body'), async (req, re
                 name: sheetUpdates.Name || existingItem.Name,
                 tags: sheetUpdates.Tags !== undefined ? sheetUpdates.Tags : existingItem.Tags,
                 make: make,
-                aed_buying_price: sheetUpdates.AED_Buying_Price || parseFloat(existingItem.AED_Buying_Price) || 0,
-                ksh_buying_price: sheetUpdates.KSH_Buying_Price || parseFloat(existingItem.KSH_Buying_Price) || 0,
-                selling_price: sheetUpdates.Selling_Price || parseFloat(existingItem.Selling_Price) || 0,
+                aed_buying_price: sheetUpdates.AED_Buying_Price || parsePrice(existingItem.AED_Buying_Price),
+                ksh_buying_price: sheetUpdates.KSH_Buying_Price || parsePrice(existingItem.KSH_Buying_Price),
+                selling_price: sheetUpdates.Selling_Price || parsePrice(existingItem.Selling_Price),
                 stock_qty: newStock,
                 min_stock: sheetUpdates.Min_Stock !== undefined ? sheetUpdates.Min_Stock : parseInt(existingItem.Min_Stock) || 5,
                 last_updated: now,
