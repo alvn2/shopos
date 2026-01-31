@@ -4,6 +4,7 @@ import { useInventory } from '../contexts/InventoryContext';
 import { api } from '../services/api';
 import { v4 as uuidv4 } from 'uuid';
 import { Save, X, Package, AlertCircle, Check } from 'lucide-react';
+import { PartMake } from '../types';
 
 const AddItem: React.FC = () => {
     const { refreshInventory } = useInventory();
@@ -12,7 +13,9 @@ const AddItem: React.FC = () => {
     const [partNumber, setPartNumber] = useState('');
     const [name, setName] = useState('');
     const [tags, setTags] = useState('');
+    const [make, setMake] = useState<PartMake>('Genuine');
     const [aedBuyingPrice, setAedBuyingPrice] = useState('');
+    const [kshBuyingPrice, setKshBuyingPrice] = useState('');
     const [sellingPrice, setSellingPrice] = useState('');
     const [stockQty, setStockQty] = useState('');
     const [minStock, setMinStock] = useState('5');
@@ -26,7 +29,9 @@ const AddItem: React.FC = () => {
         setPartNumber('');
         setName('');
         setTags('');
+        setMake('Genuine');
         setAedBuyingPrice('');
+        setKshBuyingPrice('');
         setSellingPrice('');
         setStockQty('');
         setMinStock('5');
@@ -45,8 +50,11 @@ const AddItem: React.FC = () => {
             setError('Item name is required');
             return;
         }
-        if (!aedBuyingPrice || parseFloat(aedBuyingPrice) <= 0) {
-            setError('Valid buying price (AED) is required');
+        // Allow either AED or KSH buying price
+        const hasAedPrice = aedBuyingPrice && parseFloat(aedBuyingPrice) > 0;
+        const hasKshPrice = kshBuyingPrice && parseFloat(kshBuyingPrice) > 0;
+        if (!hasAedPrice && !hasKshPrice) {
+            setError('Please enter a buying price (AED or KSH)');
             return;
         }
         if (!sellingPrice || parseFloat(sellingPrice) <= 0) {
@@ -62,7 +70,9 @@ const AddItem: React.FC = () => {
                 part_number: partNumber.trim().toUpperCase(),
                 name: name.trim(),
                 tags: tags.trim(),
-                aed_buying_price: parseFloat(aedBuyingPrice),
+                make: make,
+                aed_buying_price: parseFloat(aedBuyingPrice) || 0,
+                ksh_buying_price: parseFloat(kshBuyingPrice) || 0,
                 selling_price: parseFloat(sellingPrice),
                 stock_qty: parseInt(stockQty) || 0,
                 min_stock: parseInt(minStock) || 5
@@ -162,6 +172,24 @@ const AddItem: React.FC = () => {
                                     className="w-full p-3 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white focus:ring-2 focus:ring-brand-500 outline-none"
                                 />
                             </div>
+
+                            <div className="md:col-span-2">
+                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+                                    Make / Quality *
+                                </label>
+                                <select
+                                    value={make}
+                                    onChange={e => setMake(e.target.value as PartMake)}
+                                    className="w-full p-3 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white focus:ring-2 focus:ring-brand-500 outline-none"
+                                >
+                                    <option value="Genuine">Genuine (OEM)</option>
+                                    <option value="Japan">Japan (High Quality)</option>
+                                    <option value="Aftermarket">Aftermarket</option>
+                                </select>
+                                <p className="mt-1 text-xs text-gray-500">
+                                    Items with same part number but different make are stored separately
+                                </p>
+                            </div>
                         </div>
                     </div>
 
@@ -172,7 +200,7 @@ const AddItem: React.FC = () => {
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
-                                    Buying Price (AED) *
+                                    Buying Price (AED)
                                 </label>
                                 <input
                                     type="number"
@@ -182,13 +210,30 @@ const AddItem: React.FC = () => {
                                     onChange={e => setAedBuyingPrice(e.target.value)}
                                     placeholder="0.00"
                                     className="w-full p-3 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white focus:ring-2 focus:ring-brand-500 outline-none"
-                                    required
                                 />
                                 {aedBuyingPrice && (
                                     <p className="mt-1 text-xs text-gray-500">
                                         Est. landed cost: KES {estimatedLandedCost.toLocaleString(undefined, { maximumFractionDigits: 0 })}
                                     </p>
                                 )}
+                            </div>
+
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+                                    Buying Price (KSH) - Optional
+                                </label>
+                                <input
+                                    type="number"
+                                    step="1"
+                                    min="0"
+                                    value={kshBuyingPrice}
+                                    onChange={e => setKshBuyingPrice(e.target.value)}
+                                    placeholder="0"
+                                    className="w-full p-3 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white focus:ring-2 focus:ring-brand-500 outline-none"
+                                />
+                                <p className="mt-1 text-xs text-gray-500">
+                                    Use when item was purchased directly in KSH
+                                </p>
                             </div>
 
                             <div>
