@@ -48,4 +48,14 @@ function requireAdmin(req, res, next) {
     next();
 }
 
-module.exports = { authenticateSession, requireAdmin };
+/**
+ * Counter/Admin middleware - blocks workers from mutating data
+ */
+function requireCounterOrAdmin(req, res, next) {
+    if (req.user.role === 'worker') {
+        return res.status(403).json({ error: 'Permission denied: Workers cannot perform this action' });
+    }
+    next();
+}
+
+module.exports = { authenticateSession, requireAdmin, requireCounterOrAdmin };

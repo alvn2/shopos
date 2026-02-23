@@ -2,7 +2,7 @@ const express = require('express');
 const { v4: uuidv4 } = require('uuid');
 const sheets = require('../services/sheets');
 const cache = require('../services/cache');
-const { authenticateSession, requireAdmin } = require('../middleware/auth');
+const { authenticateSession, requireAdmin, requireCounterOrAdmin } = require('../middleware/auth');
 const { validate } = require('../middleware/validation');
 
 const router = express.Router();
@@ -349,12 +349,12 @@ const batchUpdate = async (req, res) => {
 };
 
 // Register routes (Batch first to avoid collision with :uuid)
-router.patch('/batch-update', batchUpdate);
-router.put('/batch-update', batchUpdate);
-router.put('/batch', batchUpdate);
+router.patch('/batch-update', requireCounterOrAdmin, batchUpdate);
+router.put('/batch-update', requireCounterOrAdmin, batchUpdate);
+router.put('/batch', requireCounterOrAdmin, batchUpdate);
 
-router.patch('/:uuid', updateSingleItem);
-router.put('/:uuid', updateSingleItem);
+router.patch('/:uuid', requireCounterOrAdmin, updateSingleItem);
+router.put('/:uuid', requireCounterOrAdmin, updateSingleItem);
 
 
 

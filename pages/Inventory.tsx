@@ -1,12 +1,16 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import Layout from '../components/common/Layout';
 import BulkImport from '../components/inventory/BulkImport';
+import { useAuth } from '../contexts/AuthContext';
 import { useInventory } from '../contexts/InventoryContext';
-import { InventoryItem, PartMake, Settings } from '../types';
+import { InventoryItem, PartMake, Settings, UserRole } from '../types';
 import { Minus, Plus, Save, RotateCcw, Check, Package, Search, Trash2, Edit2, X, Calculator, Upload } from 'lucide-react';
 import { api } from '../services/api';
 
 const Inventory: React.FC = () => {
+  const { user } = useAuth();
+  const isWorker = user?.role === UserRole.WORKER;
+
   const { items, loading, refreshInventory } = useInventory();
   const [localItems, setLocalItems] = useState<InventoryItem[]>([]);
   const [modifiedIds, setModifiedIds] = useState<Set<string>>(new Set());
@@ -118,8 +122,7 @@ const Inventory: React.FC = () => {
     setEditSaving(true);
 
     try {
-      await api.inventory.updateBatch([{
-        uuid: editingItem.uuid,
+      await api.inventory.update(editingItem.uuid, {
         part_number: editForm.part_number.trim().toUpperCase(),
         name: editForm.name.trim(),
         tags: editForm.tags.trim(),
@@ -128,7 +131,7 @@ const Inventory: React.FC = () => {
         ksh_buying_price: parseFloat(editForm.ksh_buying_price) || 0,
         selling_price: parseFloat(editForm.selling_price) || 0,
         min_stock: parseInt(editForm.min_stock) || 5
-      }]);
+      });
       await refreshInventory();
       closeEditModal();
     } catch (e) {
@@ -164,12 +167,14 @@ const Inventory: React.FC = () => {
     <Layout title="Inventory">
       <div className="p-4 lg:p-6 max-w-5xl mx-auto">
         {/* Rate Info Banner */}
-        <div className="mb-4 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-lg flex items-center gap-3 text-sm">
-          <Calculator size={18} className="text-blue-500" />
-          <span className="text-blue-800 dark:text-blue-200">
-            <strong>Rate:</strong> AED × {aedRate} × (1 + {conversionPercent}%) = <strong>{(aedRate * (1 + conversionPercent / 100)).toFixed(2)} KES/AED landed</strong>
-          </span>
-        </div>
+        {!isWorker && (
+          <div className="mb-4 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-lg flex items-center gap-3 text-sm">
+            <Calculator size={18} className="text-blue-500" />
+            <span className="text-blue-800 dark:text-blue-200">
+              <strong>Rate:</strong> AED × {aedRate} × (1 + {conversionPercent}%) = <strong>{(aedRate * (1 + conversionPercent / 100)).toFixed(2)} KES/AED landed</strong>
+            </span>
+          </div>
+        )}
 
         {/* Page Header */}
         <div className="mb-6 flex items-start justify-between">
@@ -179,13 +184,15 @@ const Inventory: React.FC = () => {
               {items.length} items • {lowStockCount} low stock • {outOfStockCount} out of stock
             </p>
           </div>
-          <button
-            onClick={() => setShowBulkImport(true)}
-            className="flex items-center gap-2 px-4 py-2 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 font-medium text-sm"
-          >
-            <Upload size={18} />
-            Import
-          </button>
+          {!isWorker && (
+            <button
+              onClick={() => setShowBulkImport(true)}
+              className="flex items-center gap-2 px-4 py-2 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 font-medium text-sm"
+            >
+              <Upload size={18} />
+              Import
+            </button>
+          )}
         </div>
 
         {/* Search & Filters */}
@@ -265,46 +272,52 @@ const Inventory: React.FC = () => {
                       <div className="font-semibold text-gray-900 dark:text-white text-lg">{item.name}</div>
                       {item.tags && <div className="text-xs text-gray-400 mt-1">{item.tags}</div>}
                     </div>
-                    <div className="flex gap-1">
-                      <button
-                        onClick={() => openEditModal(item)}
-                        className="p-2 text-gray-400 hover:text-blue-500 transition-colors"
-                        title="Edit item"
-                      >
-                        <Edit2 size={18} />
-                      </button>
-                      <button
-                        onClick={() => handleDelete(item.uuid)}
-                        className="p-2 text-gray-400 hover:text-red-500 transition-colors"
-                        title="Delete item"
-                      >
-                        <Trash2 size={18} />
-                      </button>
-                    </div>
+                    {!isWorker && (
+                      <div className="flex gap-1">
+                        <button
+                          onClick={() => openEditModal(item)}
+                          className="p-2 text-gray-400 hover:text-blue-500 transition-colors"
+                          title="Edit item"
+                        >
+                          <Edit2 size={18} />
+                        </button>
+                        <button
+                          onClick={() => handleDelete(item.uuid)}
+                          className="p-2 text-gray-400 hover:text-red-500 transition-colors"
+                          title="Delete item"
+                        >
+                          <Trash2 size={18} />
+                        </button>
+                      </div>
+                    )}
                   </div>
 
                   {/* Pricing Row - Enhanced with KES buying price */}
                   <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-3 mb-3 space-y-2">
-                    <div className="flex items-center justify-between text-sm">
-                      <div className="text-gray-500 dark:text-gray-400">
-                        <span className="font-medium">Buy:</span> AED {item.aed_buying_price}
-                        <span className="mx-1">→</span>
-                        <span className="text-gray-700 dark:text-gray-300 font-bold">KES {landedCostKES.toLocaleString()}</span>
-                        <span className="text-xs text-gray-400 ml-1">(landed)</span>
+                    {!isWorker && (
+                      <div className="flex items-center justify-between text-sm">
+                        <div className="text-gray-500 dark:text-gray-400">
+                          <span className="font-medium">Buy:</span> AED {item.aed_buying_price}
+                          <span className="mx-1">→</span>
+                          <span className="text-gray-700 dark:text-gray-300 font-bold">KES {landedCostKES.toLocaleString()}</span>
+                          <span className="text-xs text-gray-400 ml-1">(landed)</span>
+                        </div>
                       </div>
-                    </div>
+                    )}
                     <div className="flex items-center justify-between text-sm">
                       <div>
                         <span className="text-gray-500 dark:text-gray-400 font-medium">Sell:</span>
                         <span className="ml-2 text-brand-600 dark:text-brand-400 font-bold text-lg">KES {item.selling_price.toLocaleString()}</span>
                       </div>
-                      <div className={`px-2 py-1 rounded text-xs font-bold ${profitMargin > 30 ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300' : profitMargin > 10 ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-300' : 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300'}`}>
-                        {profitMargin > 0 ? '+' : ''}{profitMargin}% margin
-                      </div>
+                      {!isWorker && (
+                        <div className={`px-2 py-1 rounded text-xs font-bold ${profitMargin > 30 ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300' : profitMargin > 10 ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-300' : 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300'}`}>
+                          {profitMargin > 0 ? '+' : ''}{profitMargin}% margin
+                        </div>
+                      )}
                     </div>
                     <div className="text-xs text-gray-400 flex justify-between">
                       <span>Min stock: {item.min_stock}</span>
-                      <span>Profit: KES {(item.selling_price - landedCostKES).toLocaleString()}/unit</span>
+                      {!isWorker && <span>Profit: KES {(item.selling_price - landedCostKES).toLocaleString()}/unit</span>}
                     </div>
                   </div>
 
@@ -314,19 +327,23 @@ const Inventory: React.FC = () => {
                       {isModified && original ? `Was: ${original.stock_qty}` : 'Stock'}
                     </div>
                     <div className="flex items-center gap-4">
-                      <button
-                        onClick={() => handleAdjust(item.uuid, -1)}
-                        className="w-10 h-10 rounded-full bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 flex items-center justify-center active:scale-95 transition-transform hover:bg-gray-200 dark:hover:bg-gray-600"
-                      >
-                        <Minus size={20} />
-                      </button>
+                      {!isWorker && (
+                        <button
+                          onClick={() => handleAdjust(item.uuid, -1)}
+                          className="w-10 h-10 rounded-full bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 flex items-center justify-center active:scale-95 transition-transform hover:bg-gray-200 dark:hover:bg-gray-600"
+                        >
+                          <Minus size={20} />
+                        </button>
+                      )}
                       <span className="text-2xl font-bold w-16 text-center dark:text-white">{item.stock_qty}</span>
-                      <button
-                        onClick={() => handleAdjust(item.uuid, 1)}
-                        className="w-10 h-10 rounded-full bg-brand-100 dark:bg-brand-900 text-brand-600 dark:text-brand-300 flex items-center justify-center active:scale-95 transition-transform hover:bg-brand-200 dark:hover:bg-brand-800"
-                      >
-                        <Plus size={20} />
-                      </button>
+                      {!isWorker && (
+                        <button
+                          onClick={() => handleAdjust(item.uuid, 1)}
+                          className="w-10 h-10 rounded-full bg-brand-100 dark:bg-brand-900 text-brand-600 dark:text-brand-300 flex items-center justify-center active:scale-95 transition-transform hover:bg-brand-200 dark:hover:bg-brand-800"
+                        >
+                          <Plus size={20} />
+                        </button>
+                      )}
                     </div>
                   </div>
                 </div>

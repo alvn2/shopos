@@ -309,6 +309,7 @@ const SettingsPage: React.FC = () => {
                       className="w-full p-2.5 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg dark:text-white text-sm"
                     >
                       <option value={UserRole.COUNTER}>Counter</option>
+                      <option value={UserRole.WORKER}>Worker</option>
                       <option value={UserRole.ADMIN}>Admin</option>
                     </select>
                   </div>

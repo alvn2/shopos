@@ -19,6 +19,7 @@ const Layout: React.FC<LayoutProps> = ({ children, title }) => {
     const { user, logout } = useAuth();
     const navigate = useNavigate();
     const [userMenuOpen, setUserMenuOpen] = React.useState(false);
+    const isWorker = user?.role === UserRole.WORKER;
 
     const handleLogout = async () => {
         await logout();
@@ -59,10 +60,13 @@ const Layout: React.FC<LayoutProps> = ({ children, title }) => {
                             <Package size={16} />
                             Inventory
                         </NavLink>
-                        <NavLink to="/add-item" className={navLinkClass}>
-                            <Plus size={16} />
-                            Add Item
-                        </NavLink>
+                        {/* Desktop Add Item Nav */}
+                        {!isWorker && (
+                            <NavLink to="/add-item" className={navLinkClass}>
+                                <Plus size={16} />
+                                Add Item
+                            </NavLink>
+                        )}
                         <NavLink to="/sales" className={navLinkClass}>
                             <FileText size={16} />
                             Record Sale
@@ -159,15 +163,17 @@ const Layout: React.FC<LayoutProps> = ({ children, title }) => {
 
             {/* ===== MOBILE BOTTOM NAV ===== */}
             <nav className="lg:hidden fixed bottom-0 left-0 right-0 z-50 bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 h-16">
-                <div className="grid grid-cols-5 h-full">
+                <div className={`grid h-full ${isWorker ? 'grid-cols-4' : 'grid-cols-5'}`}>
                     <NavLink to="/" className={mobileNavClass} end>
                         <Package size={22} />
                         <span>Inventory</span>
                     </NavLink>
-                    <NavLink to="/add-item" className={mobileNavClass}>
-                        <Plus size={22} />
-                        <span>Add</span>
-                    </NavLink>
+                    {!isWorker && (
+                        <NavLink to="/add-item" className={mobileNavClass}>
+                            <Plus size={22} />
+                            <span>Add</span>
+                        </NavLink>
+                    )}
                     <NavLink to="/sales" className={mobileNavClass}>
                         <FileText size={22} />
                         <span>Record</span>

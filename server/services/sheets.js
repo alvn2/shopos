@@ -208,20 +208,38 @@ async function batchUpdate(tabName, updates, idField = 'UUID') {
     const sheet = await getSheet(tabName);
     const rows = await sheet.getRows();
 
+    // Instead of sequentially saving each row (1 API call per row),
+    // we use cell-based batch updating (1 API call total for all rows).
+    await sheet.loadCells();
+
     let count = 0;
     for (const update of updates) {
-        const row = rows.find(r => r.get(idField) === String(update[idField.toLowerCase()] || update[idField]));
+        const idValue = String(update[idField.toLowerCase()] || update[idField]);
+        const row = rows.find(r => r.get(idField) === idValue);
+
         if (row) {
+            // row.rowNumber is 1-based (row 2 is the first data row)
+            // sheet.getCell uses 0-based indices
+            const rowIndex = row.rowNumber - 1;
+
             Object.keys(update).forEach(key => {
                 if (key !== idField && key !== idField.toLowerCase()) {
                     // Map camelCase to sheet column names
                     const columnName = key.charAt(0).toUpperCase() + key.slice(1).replace(/_([a-z])/g, (_, c) => c.toUpperCase());
-                    row.set(columnName, update[key]);
+
+                    const colIndex = sheet.headerValues.indexOf(columnName);
+                    if (colIndex !== -1) {
+                        const cell = sheet.getCell(rowIndex, colIndex);
+                        cell.value = update[key];
+                    }
                 }
             });
-            await row.save();
             count++;
         }
+    }
+
+    if (count > 0) {
+        await sheet.saveUpdatedCells();
     }
 
     return count;
