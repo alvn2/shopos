@@ -205,7 +205,11 @@ async function fetchAPI<T>(
         }
 
         const error = await response.json().catch(() => ({ error: 'Request failed' }));
-        throw new Error(error.error || `HTTP ${response.status}`);
+        let errorMessage = error.error || `HTTP ${response.status}`;
+        if (error.details && Array.isArray(error.details)) {
+          errorMessage += `: ${error.details.join(', ')}`;
+        }
+        throw new Error(errorMessage);
       }
 
       return response.json();

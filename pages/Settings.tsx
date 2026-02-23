@@ -117,8 +117,8 @@ const SettingsPage: React.FC = () => {
       setChangingPassword(null);
       setNewPassword('');
       setMessage({ type: 'success', text: 'Password updated!' });
-    } catch (e) {
-      setMessage({ type: 'error', text: 'Failed to update password' });
+    } catch (e: any) {
+      setMessage({ type: 'error', text: e.message || 'Failed to update password' });
     }
   };
 

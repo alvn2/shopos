@@ -213,6 +213,13 @@ router.put('/users/:username', requireAdmin, async (req, res) => {
 
         // Handle password change
         if (updates.password_hash) {
+            const passwordCheck = validatePasswordStrength(updates.password_hash);
+            if (!passwordCheck.valid) {
+                return res.status(400).json({
+                    error: 'Password does not meet requirements',
+                    details: passwordCheck.errors
+                });
+            }
             updateData.Password_Hash = await bcrypt.hash(updates.password_hash, 10);
         }
 
