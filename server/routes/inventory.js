@@ -470,6 +470,9 @@ router.post('/bulk-import', requireAdmin, validate('bulkImport', 'body'), async 
                         if (item.selling_price > 0) sheetUpdates.Selling_Price = item.selling_price;
                         if (item.min_stock !== undefined) sheetUpdates.Min_Stock = item.min_stock;
 
+                        // Ensure our local duplicate tracking stays in sync
+                        existingItem.Stock_Qty = newStock;
+
                         await sheets.updateRow(TABS.INVENTORY, { UUID: existingItem.UUID }, sheetUpdates);
 
                         results.updated++;

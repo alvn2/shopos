@@ -118,12 +118,27 @@ const BulkImport: React.FC<BulkImportProps> = ({ onComplete, onClose }) => {
             });
         }
 
-        if (parsedItems.length === 0) {
-            setErrors(['No valid items found in CSV']);
+        // Deduplicate parsed items by part_number and make
+        const uniqueItemsMap = new Map<string, ImportItem>();
+        parsedItems.forEach(item => {
+            const key = `${item.part_number.toUpperCase()}_${item.make}`;
+            if (uniqueItemsMap.has(key)) {
+                const existing = uniqueItemsMap.get(key)!;
+                existing.stock_qty = (existing.stock_qty || 0) + (item.stock_qty || 0);
+                parseErrors.push(`Merged duplicate row for ${item.part_number} (${item.make}) - added stock.`);
+            } else {
+                uniqueItemsMap.set(key, item);
+            }
+        });
+
+        const deduplicatedItems = Array.from(uniqueItemsMap.values());
+
+        if (deduplicatedItems.length === 0) {
+            setErrors([...parseErrors, 'No valid items found in CSV']);
             return;
         }
 
-        setItems(parsedItems);
+        setItems(deduplicatedItems);
         setErrors(parseErrors);
         setStep('preview');
     }, []);
