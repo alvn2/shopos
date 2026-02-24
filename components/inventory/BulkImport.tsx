@@ -50,7 +50,13 @@ const BulkImport: React.FC<BulkImportProps> = ({ onComplete, onClose }) => {
             return;
         }
 
-        const headers = lines[0].split(',').map(h => h.trim().toLowerCase().replace(/\s+/g, '_'));
+        const headers = lines[0].split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/).map(h => {
+            let val = h.trim();
+            if (val.startsWith('"') && val.endsWith('"')) {
+                val = val.slice(1, -1);
+            }
+            return val.toLowerCase().replace(/\s+/g, '_');
+        });
         const requiredHeaders = ['part_number', 'name'];
         const missing = requiredHeaders.filter(h => !headers.includes(h));
 
@@ -66,8 +72,14 @@ const BulkImport: React.FC<BulkImportProps> = ({ onComplete, onClose }) => {
             const line = lines[i].trim();
             if (!line) continue;
 
-            // Simple CSV parsing (handles basic cases)
-            const values = line.split(',').map(v => v.trim());
+            // Robust CSV parsing to handle commas inside quotes
+            const values = line.split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/).map(v => {
+                let val = v.trim();
+                if (val.startsWith('"') && val.endsWith('"')) {
+                    val = val.slice(1, -1);
+                }
+                return val;
+            });
             const row: Record<string, string> = {};
             headers.forEach((h, idx) => {
                 row[h] = values[idx] || '';
@@ -79,18 +91,25 @@ const BulkImport: React.FC<BulkImportProps> = ({ onComplete, onClose }) => {
                 continue;
             }
 
-            // Validate make
-            const make = row.make || 'Genuine';
-            if (!['Genuine', 'Japan', 'Aftermarket'].includes(make)) {
-                parseErrors.push(`Row ${i + 1}: Invalid make "${make}". Use Genuine, Japan, or Aftermarket`);
-                continue;
+            // Map fuzzy make strings to strict PartMake type
+            const rawMake = (row.make || '').toLowerCase();
+            let make: PartMake = 'Aftermarket';
+            if (rawMake.includes('genuine') || rawMake.includes('oem')) {
+                make = 'Genuine';
+            } else if (rawMake.includes('japan')) {
+                make = 'Japan';
             }
+
+            // Concatenate additional catalog columns into tags
+            const extraTags = [row.tags, row.vehicle_engine, row.description]
+                .filter(Boolean)
+                .join(', ');
 
             parsedItems.push({
                 part_number: row.part_number,
                 name: row.name,
-                tags: row.tags || '',
-                make: make as PartMake,
+                tags: extraTags,
+                make,
                 aed_buying_price: parseFloat(row.aed_buying_price) || 0,
                 ksh_buying_price: parseFloat(row.ksh_buying_price) || 0,
                 selling_price: parseFloat(row.selling_price) || 0,
