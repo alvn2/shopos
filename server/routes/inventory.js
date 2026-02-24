@@ -439,6 +439,9 @@ router.post('/bulk-import', requireAdmin, validate('bulkImport', 'body'), async 
             items: []
         };
 
+        const rowsToCreate = [];
+        const rowsToUpdate = [];
+
         for (let i = 0; i < items.length; i++) {
             const item = items[i];
             try {
@@ -473,7 +476,8 @@ router.post('/bulk-import', requireAdmin, validate('bulkImport', 'body'), async 
                         // Ensure our local duplicate tracking stays in sync
                         existingItem.Stock_Qty = newStock;
 
-                        await sheets.updateRow(TABS.INVENTORY, { UUID: existingItem.UUID }, sheetUpdates);
+                        sheetUpdates.UUID = existingItem.UUID;
+                        rowsToUpdate.push(sheetUpdates);
 
                         results.updated++;
                         results.items.push({
@@ -511,7 +515,7 @@ router.post('/bulk-import', requireAdmin, validate('bulkImport', 'body'), async 
                         Updated_By: username
                     };
 
-                    await sheets.addRow(TABS.INVENTORY, newItem);
+                    rowsToCreate.push(newItem);
 
                     // Add to activeItems for duplicate checking of subsequent items
                     activeItems.push(newItem);
@@ -532,6 +536,15 @@ router.post('/bulk-import', requireAdmin, validate('bulkImport', 'body'), async 
                     error: itemError.message
                 });
             }
+        }
+
+        // Execute batch database operations
+        if (rowsToUpdate.length > 0) {
+            await sheets.batchUpdate(TABS.INVENTORY, rowsToUpdate, 'UUID');
+        }
+
+        if (rowsToCreate.length > 0) {
+            await sheets.addRows(TABS.INVENTORY, rowsToCreate);
         }
 
         // Invalidate cache

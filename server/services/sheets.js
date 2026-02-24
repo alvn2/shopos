@@ -131,6 +131,15 @@ async function addRow(tabName, data) {
 }
 
 /**
+ * Add multiple new rows to a sheet (batch creation)
+ */
+async function addRows(tabName, dataArray) {
+    const sheet = await getSheet(tabName);
+    const rows = await sheet.addRows(dataArray);
+    return rows.map(row => row.toObject());
+}
+
+/**
  * Find and update a row by filter criteria
  */
 async function updateRow(tabName, filter, updates) {
@@ -270,6 +279,7 @@ module.exports = {
     getSheet,
     getAllRows,
     addRow,
+    addRows,
     updateRow,
     deleteRow,
     deleteRows,
