@@ -198,8 +198,8 @@ const Inventory: React.FC = () => {
           )}
         </div>
 
-        {/* Search & Filters */}
-        <div className="glass-panel rounded-2xl p-5 border border-slate-200 dark:border-slate-800 space-y-5">
+        {/* Search & Filters (Sticky) */}
+        <div className="sticky top-4 z-30 glass-panel rounded-2xl p-5 border border-slate-200 dark:border-slate-800 space-y-5 shadow-xl shadow-brand-900/5 backdrop-blur-2xl bg-white/60 dark:bg-slate-900/60 transition-all duration-300">
           <div className="relative group">
             <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
               <Search size={20} className="text-slate-400 group-focus-within:text-brand-500 transition-colors duration-300" />
