@@ -79,7 +79,7 @@ const schemas = {
             type: 'array',
             required: true,
             minItems: 1,
-            maxItems: 500,
+            maxItems: 5000,
             items: {
                 part_number: { type: 'string', required: true, maxLength: 100 },
                 name: { type: 'string', required: true, maxLength: 200 },
