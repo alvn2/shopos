@@ -145,11 +145,11 @@ const RecordSale: React.FC = () => {
 
   return (
     <Layout title="Record Sale">
-      <div className="p-4 lg:p-6 max-w-3xl mx-auto">
+      <div className="p-4 lg:p-8 max-w-4xl mx-auto animate-enter">
         {/* Header */}
-        <div className="mb-6">
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Record a Sale</h1>
-          <p className="text-gray-500 dark:text-gray-400 mt-1">Enter completed sales to keep records and update stock</p>
+        <div className="mb-8">
+          <h1 className="text-3xl font-extrabold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-slate-900 to-slate-600 dark:from-white dark:to-slate-400">Record a Sale</h1>
+          <p className="text-slate-500 dark:text-slate-400 mt-2 font-medium">Enter completed sales to keep records and automatically deduct stock</p>
         </div>
 
         {/* Messages */}
@@ -168,43 +168,45 @@ const RecordSale: React.FC = () => {
           </div>
         )}
 
-        <form onSubmit={handleSubmit} className="space-y-5">
+        <form onSubmit={handleSubmit} className="space-y-6">
           {/* Receipt Details */}
-          <div className="bg-white dark:bg-gray-800 p-5 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700">
-            <h3 className="font-semibold text-gray-900 dark:text-gray-100 mb-4 flex items-center gap-2">
-              <FileText size={18} />
+          <div className="glass-panel p-6 rounded-3xl border border-slate-200/60 dark:border-slate-800">
+            <h3 className="font-bold text-slate-800 dark:text-slate-200 mb-5 flex items-center gap-3 text-lg">
+              <div className="p-2 bg-indigo-100 dark:bg-indigo-900/40 rounded-lg text-indigo-600 dark:text-indigo-400">
+                <FileText size={20} />
+              </div>
               Receipt Details
             </h3>
 
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-              <div>
-                <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1.5">Sale Date</label>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
+              <div className="space-y-1.5">
+                <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider pl-1">Sale Date</label>
                 <input
                   type="date"
                   value={date}
                   onChange={e => setDate(e.target.value)}
-                  className="w-full p-2.5 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg text-sm dark:text-white focus:ring-2 focus:ring-brand-500 outline-none"
+                  className="w-full p-3 bg-slate-50/50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-xl text-sm font-medium text-slate-900 dark:text-white focus:ring-2 focus:ring-brand-500/50 focus:border-brand-500 outline-none transition-all shadow-inner"
                 />
               </div>
 
-              <div>
-                <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1.5">Receipt # *</label>
+              <div className="space-y-1.5">
+                <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider pl-1">Receipt # <span className="text-rose-500">*</span></label>
                 <input
                   type="text"
                   value={receiptNo}
                   onChange={e => setReceiptNo(e.target.value)}
                   placeholder="e.g. 0042"
                   required
-                  className="w-full p-2.5 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg text-sm dark:text-white focus:ring-2 focus:ring-brand-500 outline-none"
+                  className="w-full p-3 bg-slate-50/50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-xl text-sm font-medium text-slate-900 dark:text-white placeholder-slate-400 focus:ring-2 focus:ring-brand-500/50 focus:border-brand-500 outline-none transition-all shadow-inner"
                 />
               </div>
 
-              <div>
-                <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1.5">Payment</label>
+              <div className="space-y-1.5">
+                <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider pl-1">Payment</label>
                 <select
                   value={paymentMethod}
                   onChange={e => setPaymentMethod(e.target.value as any)}
-                  className="w-full p-2.5 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg text-sm dark:text-white"
+                  className="w-full p-3 bg-slate-50/50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-xl text-sm font-medium text-slate-900 dark:text-white focus:ring-2 focus:ring-brand-500/50 focus:border-brand-500 outline-none transition-all shadow-inner"
                 >
                   <option value="Cash">Cash</option>
                   <option value="M-Pesa">M-Pesa</option>
@@ -212,48 +214,59 @@ const RecordSale: React.FC = () => {
                 </select>
               </div>
 
-              <div>
-                <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1.5">Customer</label>
+              <div className="space-y-1.5">
+                <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider pl-1">Customer</label>
                 <input
                   type="text"
                   value={customerName}
                   onChange={e => setCustomerName(e.target.value)}
                   placeholder="Optional"
-                  className="w-full p-2.5 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg text-sm dark:text-white"
+                  className="w-full p-3 bg-slate-50/50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-xl text-sm font-medium text-slate-900 dark:text-white placeholder-slate-400 focus:ring-2 focus:ring-brand-500/50 focus:border-brand-500 outline-none transition-all shadow-inner"
                 />
               </div>
             </div>
           </div>
 
           {/* Items */}
-          <div className="bg-white dark:bg-gray-800 p-5 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700">
-            <h3 className="font-semibold text-gray-900 dark:text-gray-100 mb-4">Items Sold</h3>
+          <div className="glass-panel p-6 rounded-3xl border border-slate-200/60 dark:border-slate-800">
+            <div className="flex items-center justify-between mb-5">
+              <h3 className="font-bold text-slate-800 dark:text-slate-200 flex items-center gap-3 text-lg">
+                <div className="p-2 bg-brand-100 dark:bg-brand-900/40 rounded-lg text-brand-600 dark:text-brand-400">
+                  <Hash size={20} />
+                </div>
+                Items Sold
+              </h3>
+              <span className="text-xs font-bold text-slate-400 bg-slate-100 dark:bg-slate-800 px-3 py-1 rounded-full">{lineItems.length} items</span>
+            </div>
 
             {/* Search */}
-            <div className="relative mb-4">
-              <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+            <div className="relative mb-6">
+              <Search size={20} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
               <input
                 type="text"
-                placeholder="Search to add item..."
+                placeholder="Search inventory to add..."
                 value={searchTerm}
                 onChange={e => { setSearchTerm(e.target.value); setShowSearch(true); }}
                 onFocus={() => setShowSearch(true)}
-                className="w-full pl-10 pr-4 py-2.5 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg text-sm dark:text-white focus:ring-2 focus:ring-brand-500 outline-none"
+                className="w-full pl-12 pr-4 py-3.5 bg-slate-50/50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-xl text-sm font-medium text-slate-900 dark:text-white placeholder-slate-400 focus:ring-2 focus:ring-brand-500/50 focus:border-brand-500 outline-none transition-all shadow-inner"
               />
 
               {showSearch && searchResults.length > 0 && (
-                <div className="absolute z-20 w-full mt-1 bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-600 max-h-60 overflow-y-auto">
+                <div className="absolute z-30 w-full mt-2 glass-dropdown rounded-2xl overflow-hidden animate-enter origin-top">
                   {searchResults.map(item => (
                     <button
                       key={item.uuid}
                       type="button"
                       onClick={() => addItem(item)}
-                      className="w-full text-left p-3 hover:bg-gray-50 dark:hover:bg-gray-700 border-b dark:border-gray-700 last:border-0"
+                      className="w-full text-left p-4 hover:bg-slate-50 dark:hover:bg-slate-800/80 border-b border-slate-100 dark:border-slate-700/50 last:border-0 transition-colors group"
                     >
-                      <div className="font-medium text-sm dark:text-white">{item.name}</div>
-                      <div className="flex justify-between text-xs text-gray-500 mt-0.5">
-                        <span className="font-mono">{item.part_number}</span>
-                        <span>KES {item.selling_price.toLocaleString()} • Stock: {item.stock_qty}</span>
+                      <div className="font-bold text-sm text-slate-900 dark:text-white group-hover:text-brand-600 dark:group-hover:text-brand-400 transition-colors">{item.name}</div>
+                      <div className="flex justify-between items-center text-xs mt-1.5">
+                        <span className="font-mono font-semibold text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded">{item.part_number}</span>
+                        <div className="flex items-center gap-3">
+                          <span className="font-bold text-slate-700 dark:text-slate-300">KES {item.selling_price.toLocaleString()}</span>
+                          <span className={`px-2 py-0.5 rounded-full font-bold ${item.stock_qty > 0 ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30' : 'bg-rose-100 text-rose-700 dark:bg-rose-900/30'}`}>Stock: {item.stock_qty}</span>
+                        </div>
                       </div>
                     </button>
                   ))}
@@ -263,45 +276,51 @@ const RecordSale: React.FC = () => {
 
             {/* Line Items */}
             {lineItems.length > 0 ? (
-              <div className="space-y-3">
+              <div className="space-y-4">
                 {lineItems.map(item => (
-                  <div key={item.uuid} className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-3">
-                    <div className="flex justify-between items-start mb-2">
-                      <div>
-                        <div className="font-medium text-sm dark:text-white">{item.name}</div>
-                        <div className="text-xs text-gray-500 font-mono">{item.part_number}</div>
-                        <div className="text-xs text-gray-400 mt-1">Buy: AED {item.buying_price_aed}</div>
-                      </div>
-                      <button type="button" onClick={() => removeItem(item.uuid)} className="text-red-400 hover:text-red-600 p-1">
-                        <Trash2 size={16} />
-                      </button>
-                    </div>
+                  <div key={item.uuid} className="bg-white dark:bg-slate-800 rounded-2xl p-4 border border-slate-200 dark:border-slate-700 shadow-sm relative group transition-all hover:shadow-md hover:border-brand-300 dark:hover:border-brand-700 w-full">
+                    {/* Item Remove Button (Absolute) */}
+                    <button type="button" onClick={() => removeItem(item.uuid)} className="absolute -right-2 -top-2 w-8 h-8 bg-white dark:bg-slate-700 rounded-full shadow border border-slate-200 dark:border-slate-600 flex items-center justify-center text-rose-500 hover:text-white hover:bg-rose-500 dark:hover:bg-rose-500 transition-all z-10 opacity-0 group-hover:opacity-100 scale-90 group-hover:scale-100">
+                      <X size={14} className="stroke-[3]" />
+                    </button>
 
-                    <div className="grid grid-cols-3 gap-3">
-                      <div>
-                        <label className="block text-xs text-gray-500 mb-1">Qty</label>
-                        <input
-                          type="number"
-                          min="1"
-                          value={item.qty}
-                          onChange={e => updateLineItem(item.uuid, 'qty', parseInt(e.target.value) || 1)}
-                          className="w-full p-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded text-sm dark:text-white text-center"
-                        />
+                    <div className="flex flex-col md:flex-row gap-4 w-full">
+                      {/* Item Info side */}
+                      <div className="flex-1">
+                        <div className="font-bold text-sm text-slate-900 dark:text-white mb-1 leading-tight pr-6">{item.name}</div>
+                        <div className="flex items-center gap-2 mb-2">
+                          <div className="text-xs text-slate-500 font-mono font-bold bg-slate-100 dark:bg-slate-900 px-2 py-0.5 rounded border border-slate-200 dark:border-slate-700">{item.part_number}</div>
+                          <div className="text-xs text-slate-400 font-medium">Buy: AED {item.buying_price_aed}</div>
+                        </div>
                       </div>
-                      <div>
-                        <label className="block text-xs text-gray-500 mb-1">Price (KES)</label>
-                        <input
-                          type="number"
-                          min="0"
-                          value={item.sold_for}
-                          onChange={e => updateLineItem(item.uuid, 'sold_for', parseFloat(e.target.value) || 0)}
-                          className="w-full p-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded text-sm dark:text-white text-center"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-xs text-gray-500 mb-1">Subtotal</label>
-                        <div className="p-2 bg-gray-100 dark:bg-gray-600 rounded text-sm font-bold dark:text-white text-center">
-                          {(item.sold_for * item.qty).toLocaleString()}
+
+                      {/* Inputs Side */}
+                      <div className="grid grid-cols-3 gap-3">
+                        <div className="space-y-1 text-center">
+                          <label className="block text-xs font-bold text-slate-500 tracking-wide uppercase">Qty</label>
+                          <input
+                            type="number"
+                            min="1"
+                            value={item.qty}
+                            onChange={e => updateLineItem(item.uuid, 'qty', parseInt(e.target.value) || 1)}
+                            className="w-full lg:w-20 p-2.5 mx-auto bg-slate-50/50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-sm font-bold text-slate-900 dark:text-white text-center focus:ring-2 focus:ring-brand-500 outline-none shadow-inner"
+                          />
+                        </div>
+                        <div className="space-y-1 text-center font-bold">
+                          <label className="block text-xs font-bold text-slate-500 tracking-wide uppercase">Price (KES)</label>
+                          <input
+                            type="number"
+                            min="0"
+                            value={item.sold_for}
+                            onChange={e => updateLineItem(item.uuid, 'sold_for', parseFloat(e.target.value) || 0)}
+                            className="w-full lg:w-32 p-2.5 mx-auto bg-slate-50/50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-sm font-bold text-slate-900 dark:text-white text-center focus:ring-2 focus:ring-brand-500 outline-none shadow-inner"
+                          />
+                        </div>
+                        <div className="space-y-1 text-center">
+                          <label className="block text-xs font-bold text-slate-500 tracking-wide uppercase">Subtotal</label>
+                          <div className="p-2.5 border border-transparent flex items-center justify-center text-sm font-black text-brand-600 dark:text-brand-400">
+                            {(item.sold_for * item.qty).toLocaleString()}
+                          </div>
                         </div>
                       </div>
                     </div>
@@ -309,44 +328,45 @@ const RecordSale: React.FC = () => {
                 ))}
               </div>
             ) : (
-              <div className="text-center py-8 text-gray-400">
-                <Search size={32} className="mx-auto mb-2 opacity-50" />
-                <p>Search and add items that were sold</p>
+              <div className="text-center py-10 px-4 bg-slate-50/50 dark:bg-slate-900/20 rounded-2xl border border-dashed border-slate-300 dark:border-slate-700">
+                <Search size={32} className="mx-auto mb-3 text-slate-400 opacity-50" />
+                <p className="font-bold text-slate-500 dark:text-slate-400">Search and add items that were sold</p>
+                <p className="text-sm text-slate-400 mt-1">Select from the dropdown above to build the receipt</p>
               </div>
             )}
           </div>
 
           {/* Notes */}
-          <div className="bg-white dark:bg-gray-800 p-5 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700">
-            <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1.5">Notes (Optional)</label>
+          <div className="glass-panel p-6 rounded-3xl border border-slate-200/60 dark:border-slate-800">
+            <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider pl-1 mb-1.5">Notes (Optional)</label>
             <textarea
               value={notes}
               onChange={e => setNotes(e.target.value)}
-              placeholder="Any notes about this sale..."
+              placeholder="Any notes about this sale (e.g., delivered by bike)..."
               rows={2}
-              className="w-full p-2.5 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg text-sm dark:text-white resize-none"
+              className="w-full p-3 bg-slate-50/50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-xl text-sm font-medium text-slate-900 dark:text-white placeholder-slate-400 focus:ring-2 focus:ring-brand-500/50 outline-none resize-none shadow-inner"
             />
           </div>
 
           {/* Summary & Submit */}
-          <div className="bg-white dark:bg-gray-800 p-5 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700">
-            <div className="grid grid-cols-3 gap-4 mb-4 text-center">
-              <div>
-                <div className="text-xs text-gray-500 mb-1">Items</div>
-                <div className="text-lg font-bold text-gray-900 dark:text-white">
+          <div className="glass-panel p-6 rounded-3xl border border-slate-200/60 dark:border-slate-800 mt-8 mb-4">
+            <div className="grid grid-cols-3 gap-4 mb-6 text-center divide-x divide-slate-200 dark:divide-slate-700/50">
+              <div className="flex flex-col items-center justify-center py-2">
+                <div className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1.5">Total Items</div>
+                <div className="text-2xl font-black text-slate-900 dark:text-white">
                   {lineItems.reduce((sum, i) => sum + i.qty, 0)}
                 </div>
               </div>
-              <div>
-                <div className="text-xs text-gray-500 mb-1">Total</div>
-                <div className="text-xl font-bold text-brand-600 dark:text-brand-400">
+              <div className="flex flex-col items-center justify-center py-2">
+                <div className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1.5">Gross Revenue</div>
+                <div className="text-2xl font-black bg-clip-text text-transparent bg-gradient-to-r from-brand-600 to-indigo-600 dark:from-brand-400 dark:to-indigo-400">
                   KES {totals.revenue.toLocaleString()}
                 </div>
               </div>
-              <div>
-                <div className="text-xs text-gray-500 mb-1">Est. Profit</div>
-                <div className={`text-lg font-bold ${totals.profit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                  {totals.profit >= 0 ? '+' : ''}{Math.round(totals.profit).toLocaleString()}
+              <div className="flex flex-col items-center justify-center py-2">
+                <div className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1.5">Est. Profit</div>
+                <div className={`text-xl font-black ${totals.profit >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
+                  {totals.profit >= 0 ? '+' : ''}KES {Math.round(totals.profit).toLocaleString()}
                 </div>
               </div>
             </div>
@@ -354,20 +374,20 @@ const RecordSale: React.FC = () => {
             <button
               type="submit"
               disabled={submitting || lineItems.length === 0}
-              className={`w-full py-3.5 rounded-xl font-bold text-white shadow-lg flex items-center justify-center transition-all ${submitting || lineItems.length === 0
-                  ? 'bg-gray-400 cursor-not-allowed'
-                  : 'bg-brand-600 hover:bg-brand-700 active:scale-[0.98]'
+              className={`w-full py-4 rounded-2xl font-black text-white text-lg flex items-center justify-center transition-all duration-300 ${submitting || lineItems.length === 0
+                ? 'bg-slate-300 dark:bg-slate-700 text-slate-500 dark:text-slate-500 cursor-not-allowed'
+                : 'bg-gradient-to-r from-brand-600 to-indigo-600 hover:shadow-glow hover:shadow-brand-500/40 active:scale-[0.98]'
                 }`}
             >
               {submitting ? 'Recording...' : (
                 <>
-                  <Check size={20} className="mr-2" />
-                  Record Sale & Update Stock
+                  <Check strokeWidth={3} size={22} className="mr-2" />
+                  Record Sale & Deduct Stock
                 </>
               )}
             </button>
 
-            <p className="text-xs text-gray-400 text-center mt-2">
+            <p className="text-xs font-bold text-slate-400 text-center mt-4 tracking-wide uppercase">
               Stock will be deducted automatically for each item
             </p>
           </div>

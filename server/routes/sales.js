@@ -3,6 +3,7 @@ const { v4: uuidv4 } = require('uuid');
 const sheets = require('../services/sheets');
 const { authenticateSession } = require('../middleware/auth');
 const { validate } = require('../middleware/validation');
+const { addSaleToQueue } = require('../services/queueService');
 
 const router = express.Router();
 const TABS = sheets.TABS;
@@ -41,38 +42,15 @@ router.post('/', async (req, res) => {
             Sold_By: req.user.username
         };
 
-        await sheets.addRow(TABS.SALES, saleRecord);
-
-        // Deduct stock for each item
-        if (items && items.length > 0) {
-            for (const item of items) {
-                try {
-                    const inventoryItem = await sheets.findRow(TABS.INVENTORY, { UUID: item.uuid });
-                    if (inventoryItem) {
-                        const currentStock = parseInt(inventoryItem.Stock_Qty) || 0;
-                        const newStock = Math.max(0, currentStock - item.qty);
-
-                        await sheets.updateRow(TABS.INVENTORY, { UUID: item.uuid }, {
-                            Stock_Qty: newStock,
-                            Last_Updated: new Date().toISOString(),
-                            Updated_By: req.user.username
-                        });
-
-                        // Audit stock deduction
-                        await logAudit(req.user.username, 'SALE_STOCK_DEDUCTION', 'INVENTORY', item.uuid,
-                            { stock_qty: currentStock },
-                            { stock_qty: newStock, sale_batch: batch_id },
-                            req
-                        );
-                    }
-                } catch (itemError) {
-                    console.error(`Failed to deduct stock for ${item.uuid}:`, itemError);
-                }
+        // Queue the sale for background processing to avoid Google Sheets API rate limits
+        await addSaleToQueue({
+            saleRecord,
+            itemsData: items,
+            reqInfo: {
+                ip: req.ip,
+                userAgent: req.headers['user-agent']
             }
-        }
-
-        // Audit the sale
-        await logAudit(req.user.username, 'SALE_RECORDED', 'SALES', batch_id, null, saleRecord, req);
+        });
 
         res.status(201).json({
             message: 'Sale recorded successfully',

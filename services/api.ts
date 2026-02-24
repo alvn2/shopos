@@ -645,8 +645,13 @@ export const api = {
       return fetchAPI(`/reports/sales-summary?${query.toString()}`);
     },
 
-    getInventoryHealth: async (): Promise<any> => {
-      return fetchAPI('/reports/inventory-health');
+    getInventoryHealth: async (params?: { minStock?: number; maxStock?: number }): Promise<any> => {
+      const query = new URLSearchParams();
+      if (params?.minStock !== undefined) query.set('minStock', params.minStock.toString());
+      if (params?.maxStock !== undefined) query.set('maxStock', params.maxStock.toString());
+
+      const queryString = query.toString() ? `?${query.toString()}` : '';
+      return fetchAPI(`/reports/inventory-health${queryString}`);
     }
   },
 

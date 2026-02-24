@@ -1,7 +1,7 @@
 const express = require('express');
 const { v4: uuidv4 } = require('uuid');
 const sheets = require('../services/sheets');
-const cache = require('../services/cache');
+const redisCache = require('../services/redisCache');
 const { authenticateSession, requireAdmin, requireCounterOrAdmin } = require('../middleware/auth');
 const { validate } = require('../middleware/validation');
 
@@ -46,7 +46,7 @@ router.get('/', async (req, res) => {
 
         // Check cache first (only for full list without filters)
         if (!search && !low_stock && limitNum === 0) {
-            const cached = cache.get(cacheKey);
+            const cached = await redisCache.getCache(cacheKey);
             if (cached) {
                 res.set('X-Cache', 'HIT');
                 return res.json(cached);
@@ -124,7 +124,7 @@ router.get('/', async (req, res) => {
         }
 
         // No pagination - cache and return full list (backward compatible)
-        cache.set(CACHE_KEY, transformed, CACHE_TTL);
+        await redisCache.setCache(CACHE_KEY, transformed, CACHE_TTL);
         res.set('X-Cache', 'MISS');
         res.json(transformed);
     } catch (error) {
@@ -180,7 +180,7 @@ router.post('/', requireAdmin, validate('inventoryItem', 'body'), async (req, re
             await sheets.updateRow(TABS.INVENTORY, { UUID: existingItem.UUID }, sheetUpdates);
 
             // Invalidate cache
-            cache.invalidate(CACHE_KEY);
+            await redisCache.invalidatePattern('inventory:*');
 
             // Audit log
             await logAudit(req.user.username, 'INVENTORY_UPDATE', 'INVENTORY', existingItem.UUID, existingItem, sheetUpdates, req);
@@ -223,7 +223,7 @@ router.post('/', requireAdmin, validate('inventoryItem', 'body'), async (req, re
         await sheets.addRow(TABS.INVENTORY, newItem);
 
         // Invalidate cache
-        cache.invalidate(CACHE_KEY);
+        await redisCache.invalidatePattern('inventory:*');
 
         // Audit log
         await logAudit(req.user.username, 'INVENTORY_CREATE', 'INVENTORY', newItem.UUID, null, newItem, req);
@@ -283,7 +283,7 @@ const updateSingleItem = async (req, res) => {
         await sheets.updateRow(TABS.INVENTORY, { UUID: uuid }, sheetUpdates);
 
         // Invalidate cache
-        cache.invalidate(CACHE_KEY);
+        await redisCache.invalidatePattern('inventory:*');
 
         // Audit log
         await logAudit(req.user.username, 'INVENTORY_UPDATE', 'INVENTORY', uuid, currentItem, sheetUpdates, req);
@@ -339,7 +339,7 @@ const batchUpdate = async (req, res) => {
         }
 
         // Invalidate cache after batch update
-        cache.invalidate(CACHE_KEY);
+        await redisCache.invalidatePattern('inventory:*');
 
         res.json({ message: `Updated ${successCount} items`, count: successCount, success: true });
     } catch (error) {
@@ -383,7 +383,7 @@ router.delete('/:uuid', requireAdmin, async (req, res) => {
         });
 
         // Invalidate cache
-        cache.invalidate(CACHE_KEY);
+        await redisCache.invalidatePattern('inventory:*');
 
         // Audit log with full old data for recovery purposes
         await logAudit(req.user.username, 'INVENTORY_SOFT_DELETE', 'INVENTORY', uuid, currentItem, { deleted: true }, req);
@@ -532,7 +532,7 @@ router.post('/bulk-import', requireAdmin, validate('bulkImport', 'body'), async 
         }
 
         // Invalidate cache
-        cache.invalidate(CACHE_KEY);
+        await redisCache.invalidatePattern('inventory:*');
 
         // Audit log
         await logAudit(username, 'INVENTORY_BULK_IMPORT', 'INVENTORY', null, null, {

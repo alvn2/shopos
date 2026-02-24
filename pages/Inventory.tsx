@@ -6,6 +6,7 @@ import { useInventory } from '../contexts/InventoryContext';
 import { InventoryItem, PartMake, Settings, UserRole } from '../types';
 import { Minus, Plus, Save, RotateCcw, Check, Package, Search, Trash2, Edit2, X, Calculator, Upload } from 'lucide-react';
 import { api } from '../services/api';
+import { Toaster, toast } from 'react-hot-toast';
 
 const Inventory: React.FC = () => {
   const { user } = useAuth();
@@ -165,63 +166,67 @@ const Inventory: React.FC = () => {
 
   return (
     <Layout title="Inventory">
-      <div className="p-4 lg:p-6 max-w-5xl mx-auto">
+      <div className="p-4 lg:p-8 max-w-6xl mx-auto space-y-8 animate-enter">
         {/* Rate Info Banner */}
         {!isWorker && (
-          <div className="mb-4 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-lg flex items-center gap-3 text-sm">
-            <Calculator size={18} className="text-blue-500" />
-            <span className="text-blue-800 dark:text-blue-200">
-              <strong>Rate:</strong> AED × {aedRate} × (1 + {conversionPercent}%) = <strong>{(aedRate * (1 + conversionPercent / 100)).toFixed(2)} KES/AED landed</strong>
+          <div className="p-4 bg-gradient-to-r from-indigo-50/50 to-cyan-50/50 dark:from-indigo-900/20 dark:to-cyan-900/20 glass-panel rounded-2xl flex items-center gap-4 text-sm text-slate-700 dark:text-slate-300 shadow-sm">
+            <div className="w-10 h-10 rounded-full bg-indigo-100 dark:bg-indigo-900/50 flex items-center justify-center shrink-0">
+              <Calculator size={20} className="text-indigo-600 dark:text-indigo-400" />
+            </div>
+            <span>
+              <strong>Base Exchange:</strong> AED × <span className="text-brand-600 dark:text-brand-400 font-mono font-bold">{aedRate}</span> × (1 + <span className="text-brand-600 dark:text-brand-400 font-mono font-bold">{conversionPercent}%</span>) = <strong className="text-indigo-700 dark:text-indigo-300 px-2 py-0.5 rounded-md bg-white/50 dark:bg-slate-800">{(aedRate * (1 + conversionPercent / 100)).toFixed(2)} KES/AED landed</strong>
             </span>
           </div>
         )}
 
         {/* Page Header */}
-        <div className="mb-6 flex items-start justify-between">
+        <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Inventory</h1>
-            <p className="text-gray-500 dark:text-gray-400 mt-1">
-              {items.length} items • {lowStockCount} low stock • {outOfStockCount} out of stock
+            <h1 className="text-3xl font-extrabold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-slate-900 to-slate-600 dark:from-white dark:to-slate-400">Inventory Management</h1>
+            <p className="text-slate-500 dark:text-slate-400 mt-2 font-medium">
+              <span className="text-slate-900 dark:text-white font-bold">{items.length}</span> items • <span className="text-amber-600 dark:text-amber-400 font-bold">{lowStockCount}</span> low stock • <span className="text-rose-600 dark:text-rose-400 font-bold">{outOfStockCount}</span> out of stock
             </p>
           </div>
           {!isWorker && (
             <button
               onClick={() => setShowBulkImport(true)}
-              className="flex items-center gap-2 px-4 py-2 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 font-medium text-sm"
+              className="flex items-center gap-2 px-6 py-3 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 rounded-xl hover:shadow-lg dark:hover:bg-slate-700 shadow-sm border border-slate-200/50 dark:border-slate-700/50 transition-all duration-300 font-semibold focus:ring-2 focus:ring-brand-500/50"
             >
               <Upload size={18} />
-              Import
+              Import Data
             </button>
           )}
         </div>
 
         {/* Search & Filters */}
-        <div className="bg-white dark:bg-gray-800 rounded-xl p-4 shadow-sm border border-gray-200 dark:border-gray-700 mb-6 space-y-4">
-          <div className="relative">
-            <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+        <div className="glass-panel rounded-2xl p-5 border border-slate-200 dark:border-slate-800 space-y-5">
+          <div className="relative group">
+            <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+              <Search size={20} className="text-slate-400 group-focus-within:text-brand-500 transition-colors duration-300" />
+            </div>
             <input
               type="text"
-              placeholder="Search by name, part number, or tag..."
+              placeholder="Search by name, part number, or tags..."
               value={searchTerm}
               onChange={e => setSearchTerm(e.target.value)}
-              className="w-full pl-10 pr-4 py-2.5 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg text-sm dark:text-white focus:ring-2 focus:ring-brand-500 outline-none"
+              className="w-full pl-12 pr-12 py-3.5 bg-slate-50/50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white placeholder-slate-400 focus:ring-2 focus:ring-brand-500/50 focus:border-brand-500 outline-none transition-all duration-300 shadow-inner"
             />
             {searchTerm && (
-              <button onClick={() => setSearchTerm('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400">
+              <button onClick={() => setSearchTerm('')} className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors p-1 rounded-full hover:bg-slate-200 dark:hover:bg-slate-700">
                 <X size={16} />
               </button>
             )}
           </div>
 
-          <div className="flex gap-2">
-            <button onClick={() => setFilter('all')} className={`flex-1 py-2 px-3 rounded-lg text-sm font-medium transition-colors ${filter === 'all' ? 'bg-brand-100 text-brand-700 dark:bg-brand-900 dark:text-brand-100' : 'text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-700'}`}>
-              All ({items.length})
+          <div className="flex bg-slate-100/50 dark:bg-slate-800/50 rounded-xl p-1 gap-1">
+            <button onClick={() => setFilter('all')} className={`flex-1 py-2.5 px-4 rounded-lg text-sm font-semibold transition-all duration-300 ${filter === 'all' ? 'bg-white text-slate-900 dark:bg-slate-700 dark:text-white shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'}`}>
+              All Items
             </button>
-            <button onClick={() => setFilter('low')} className={`flex-1 py-2 px-3 rounded-lg text-sm font-medium transition-colors ${filter === 'low' ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/50 dark:text-yellow-300' : 'text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-700'}`}>
-              Low ({lowStockCount})
+            <button onClick={() => setFilter('low')} className={`flex-1 py-2.5 px-4 rounded-lg text-sm font-semibold transition-all duration-300 ${filter === 'low' ? 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200 shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'}`}>
+              Low Stock
             </button>
-            <button onClick={() => setFilter('out')} className={`flex-1 py-2 px-3 rounded-lg text-sm font-medium transition-colors ${filter === 'out' ? 'bg-red-100 text-red-700 dark:bg-red-900/50 dark:text-red-300' : 'text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-700'}`}>
-              Out ({outOfStockCount})
+            <button onClick={() => setFilter('out')} className={`flex-1 py-2.5 px-4 rounded-lg text-sm font-semibold transition-all duration-300 ${filter === 'out' ? 'bg-rose-100 text-rose-800 dark:bg-rose-900/40 dark:text-rose-200 shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'}`}>
+              Out of Stock
             </button>
           </div>
         </div>
@@ -248,20 +253,24 @@ const Inventory: React.FC = () => {
               const profitMargin = Math.round((item.selling_price - landedCostKES) / landedCostKES * 100);
 
               return (
-                <div key={item.uuid} className={`bg-white dark:bg-gray-800 p-4 rounded-xl shadow-sm border transition-colors ${isModified ? 'border-yellow-400 bg-yellow-50/50 dark:bg-yellow-900/10' : 'border-gray-200 dark:border-gray-700'}`}>
+                <div key={item.uuid} className={`relative overflow-hidden group bg-white dark:bg-slate-800/90 p-5 lg:p-6 rounded-2xl shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] transition-all duration-300 hover:shadow-[0_8px_30px_-4px_rgba(0,0,0,0.1)] hover:-translate-y-1 border ${isModified ? 'border-amber-400 dark:border-amber-500/50 ring-4 ring-amber-500/10' : 'border-slate-200 dark:border-slate-700/50 hover:border-brand-300 dark:hover:border-brand-500/50'}`}>
+
+                  {/* Subtle Gradient wash on hover */}
+                  <div className="absolute inset-0 bg-gradient-to-br from-brand-50/50 to-transparent dark:from-brand-900/10 dark:to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none"></div>
+
                   {/* Item Header */}
-                  <div className="flex justify-between items-start mb-3">
+                  <div className="relative z-10 flex flex-col md:flex-row justify-between items-start gap-4 mb-5">
                     <div className="flex-1">
-                      <div className="flex items-center gap-2 mb-1 flex-wrap">
-                        <span className="text-xs font-mono text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-gray-700 px-2 py-0.5 rounded">{item.part_number}</span>
+                      <div className="flex items-center gap-2 mb-2 flex-wrap">
+                        <span className="text-xs font-mono font-bold bg-slate-100 dark:bg-slate-700/80 text-slate-600 dark:text-slate-300 px-2.5 py-1 rounded-md border border-slate-200 dark:border-slate-600">{item.part_number}</span>
                         {item.stock_qty === 0 && (
-                          <span className="text-xs font-medium bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 px-2 py-0.5 rounded">OUT</span>
+                          <span className="text-xs font-bold tracking-wide bg-rose-100 dark:bg-rose-900/40 text-rose-700 dark:text-rose-300 px-2.5 py-1 rounded-md border border-rose-200 dark:border-rose-800/50">OUT OF STOCK</span>
                         )}
                         {item.stock_qty > 0 && item.stock_qty <= item.min_stock && (
-                          <span className="text-xs font-medium bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300 px-2 py-0.5 rounded">LOW</span>
+                          <span className="text-xs font-bold tracking-wide bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300 px-2.5 py-1 rounded-md border border-amber-200 dark:border-amber-800/50">LOW STOCK</span>
                         )}
                         {item.make && item.make !== 'Genuine' && (
-                          <span className={`text-xs font-medium px-2 py-0.5 rounded ${item.make === 'Japan' ? 'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300' : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300'}`}>
+                          <span className={`text-xs font-bold tracking-wide px-2.5 py-1 rounded-md border ${item.make === 'Japan' ? 'bg-indigo-100 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300 border-indigo-200 dark:border-indigo-800/50' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700'}`}>
                             {item.make}
                           </span>
                         )}
@@ -269,21 +278,21 @@ const Inventory: React.FC = () => {
                           <span className="text-xs font-medium bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 px-2 py-0.5 rounded">Modified</span>
                         )}
                       </div>
-                      <div className="font-semibold text-gray-900 dark:text-white text-lg">{item.name}</div>
-                      {item.tags && <div className="text-xs text-gray-400 mt-1">{item.tags}</div>}
+                      <div className="font-extrabold text-slate-900 dark:text-white text-xl leading-tight bg-clip-text text-transparent bg-gradient-to-r from-slate-900 to-slate-700 dark:from-white dark:to-slate-300">{item.name}</div>
+                      {item.tags && <div className="text-sm font-medium text-slate-500 dark:text-slate-400 mt-1.5">{item.tags}</div>}
                     </div>
                     {!isWorker && (
-                      <div className="flex gap-1">
+                      <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
                         <button
                           onClick={() => openEditModal(item)}
-                          className="p-2 text-gray-400 hover:text-blue-500 transition-colors"
+                          className="p-2.5 bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-brand-100 hover:text-brand-600 dark:hover:bg-brand-900/50 dark:hover:text-brand-400 rounded-lg transition-colors"
                           title="Edit item"
                         >
                           <Edit2 size={18} />
                         </button>
                         <button
                           onClick={() => handleDelete(item.uuid)}
-                          className="p-2 text-gray-400 hover:text-red-500 transition-colors"
+                          className="p-2.5 bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-rose-100 hover:text-rose-600 dark:hover:bg-rose-900/50 dark:hover:text-rose-400 rounded-lg transition-colors"
                           title="Delete item"
                         >
                           <Trash2 size={18} />
@@ -292,58 +301,70 @@ const Inventory: React.FC = () => {
                     )}
                   </div>
 
-                  {/* Pricing Row - Enhanced with KES buying price */}
-                  <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-3 mb-3 space-y-2">
-                    {!isWorker && (
-                      <div className="flex items-center justify-between text-sm">
-                        <div className="text-gray-500 dark:text-gray-400">
-                          <span className="font-medium">Buy:</span> AED {item.aed_buying_price}
-                          <span className="mx-1">→</span>
-                          <span className="text-gray-700 dark:text-gray-300 font-bold">KES {landedCostKES.toLocaleString()}</span>
+                  <div className="relative z-10 grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {/* Pricing Block */}
+                    <div className="bg-slate-50/80 dark:bg-slate-900/50 rounded-xl p-4 border border-slate-100 dark:border-slate-800/50 flex flex-col justify-center">
+                      {!isWorker && (
+                        <div className="flex items-center justify-between text-sm mb-3 pb-3 border-b border-slate-200 dark:border-slate-700/50">
+                          <div>
+                            <span className="text-slate-500 dark:text-slate-400">
+                              <span className="font-semibold">Buy:</span> AED {item.aed_buying_price}
+                              <span className="mx-2 text-slate-300 dark:text-slate-600">→</span>
+                              <span className="text-slate-800 dark:text-slate-200 font-bold tracking-tight">KES {landedCostKES.toLocaleString()}</span>
+                            </span>
+                          </div>
                           <span className="text-xs text-gray-400 ml-1">(landed)</span>
                         </div>
+                      )}
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <span className="text-slate-500 dark:text-slate-400 font-semibold uppercase text-xs tracking-widest block mb-1">Sell Price</span>
+                          <span className="text-brand-600 dark:text-brand-400 font-extrabold text-2xl tracking-tight">KES {item.selling_price.toLocaleString()}</span>
+                        </div>
+                        {!isWorker && (
+                          <div className={`px-3 py-1.5 rounded-lg text-xs font-black tracking-wide ${profitMargin > 30 ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300' : profitMargin > 10 ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300' : 'bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-300'}`}>
+                            {profitMargin > 0 ? '+' : ''}{profitMargin}% MARGIN
+                          </div>
+                        )}
                       </div>
-                    )}
-                    <div className="flex items-center justify-between text-sm">
-                      <div>
-                        <span className="text-gray-500 dark:text-gray-400 font-medium">Sell:</span>
-                        <span className="ml-2 text-brand-600 dark:text-brand-400 font-bold text-lg">KES {item.selling_price.toLocaleString()}</span>
-                      </div>
+
                       {!isWorker && (
-                        <div className={`px-2 py-1 rounded text-xs font-bold ${profitMargin > 30 ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300' : profitMargin > 10 ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-300' : 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300'}`}>
-                          {profitMargin > 0 ? '+' : ''}{profitMargin}% margin
+                        <div className="mt-2 text-xs font-semibold text-slate-500 dark:text-slate-400 flex justify-between">
+                          <span>Profit: KES {(item.selling_price - landedCostKES).toLocaleString()} / unit</span>
                         </div>
                       )}
                     </div>
-                    <div className="text-xs text-gray-400 flex justify-between">
-                      <span>Min stock: {item.min_stock}</span>
-                      {!isWorker && <span>Profit: KES {(item.selling_price - landedCostKES).toLocaleString()}/unit</span>}
-                    </div>
-                  </div>
 
-                  {/* Stock Controls */}
-                  <div className="flex items-center justify-between">
-                    <div className="text-sm text-gray-400">
-                      {isModified && original ? `Was: ${original.stock_qty}` : 'Stock'}
-                    </div>
-                    <div className="flex items-center gap-4">
-                      {!isWorker && (
-                        <button
-                          onClick={() => handleAdjust(item.uuid, -1)}
-                          className="w-10 h-10 rounded-full bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 flex items-center justify-center active:scale-95 transition-transform hover:bg-gray-200 dark:hover:bg-gray-600"
-                        >
-                          <Minus size={20} />
-                        </button>
-                      )}
-                      <span className="text-2xl font-bold w-16 text-center dark:text-white">{item.stock_qty}</span>
-                      {!isWorker && (
-                        <button
-                          onClick={() => handleAdjust(item.uuid, 1)}
-                          className="w-10 h-10 rounded-full bg-brand-100 dark:bg-brand-900 text-brand-600 dark:text-brand-300 flex items-center justify-center active:scale-95 transition-transform hover:bg-brand-200 dark:hover:bg-brand-800"
-                        >
-                          <Plus size={20} />
-                        </button>
-                      )}
+                    {/* Stock Controls Block */}
+                    <div className="bg-slate-50/80 dark:bg-slate-900/50 rounded-xl p-4 border border-slate-100 dark:border-slate-800/50 flex flex-col justify-center">
+                      <div className="flex items-center justify-between mb-4">
+                        <span className="text-slate-500 dark:text-slate-400 font-semibold uppercase text-xs tracking-widest block">Current Stock</span>
+                        <span className="text-xs font-semibold text-slate-400 bg-slate-200/50 dark:bg-slate-800 px-2 py-0.5 rounded">Min: {item.min_stock}</span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <div className="text-sm font-medium text-slate-400 dark:text-slate-500">
+                          {isModified && original ? <span className="text-amber-600 dark:text-amber-400 bg-amber-100/50 dark:bg-amber-900/20 px-2 py-1 rounded">Was: {original.stock_qty}</span> : ''}
+                        </div>
+                        <div className="flex items-center border border-slate-200 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-800 p-1 shadow-sm">
+                          {!isWorker && (
+                            <button
+                              onClick={() => handleAdjust(item.uuid, -1)}
+                              className="w-10 h-10 rounded-lg bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 flex items-center justify-center hover:bg-slate-100 dark:hover:bg-slate-700 active:scale-95 transition-all"
+                            >
+                              <Minus size={20} />
+                            </button>
+                          )}
+                          <span className="text-2xl font-black w-16 text-center text-slate-900 dark:text-white font-mono">{item.stock_qty}</span>
+                          {!isWorker && (
+                            <button
+                              onClick={() => handleAdjust(item.uuid, 1)}
+                              className="w-10 h-10 rounded-lg bg-brand-500 dark:bg-brand-600 text-white flex items-center justify-center shadow-glow hover:bg-brand-600 dark:hover:bg-brand-500 active:scale-95 transition-all"
+                            >
+                              <Plus size={20} />
+                            </button>
+                          )}
+                        </div>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -353,200 +374,221 @@ const Inventory: React.FC = () => {
         </div>
 
         {/* Sticky Save Bar */}
-        {modifiedIds.size > 0 && (
-          <div className="fixed bottom-20 lg:bottom-6 left-4 right-4 lg:left-auto lg:right-6 lg:w-96 p-4 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-2xl z-40 flex items-center justify-between">
-            <div className="text-sm font-medium text-gray-600 dark:text-gray-300">
-              {modifiedIds.size} item{modifiedIds.size > 1 ? 's' : ''} modified
+        {
+          modifiedIds.size > 0 && (
+            <div className="fixed bottom-24 lg:bottom-10 left-1/2 -translate-x-1/2 lg:w-96 w-[calc(100%-2rem)] p-4 glass-dropdown rounded-2xl z-40 flex items-center justify-between animate-fade-in-up">
+              <div className="text-sm font-medium text-gray-600 dark:text-gray-300">
+                {modifiedIds.size} item{modifiedIds.size > 1 ? 's' : ''} modified
+              </div>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => { setLocalItems(items); setModifiedIds(new Set()); }}
+                  className="px-5 py-2.5 text-slate-600 dark:text-slate-300 font-bold hover:bg-slate-100 dark:hover:bg-slate-700 rounded-xl transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleSave}
+                  disabled={saving}
+                  className="px-6 py-2.5 bg-gradient-to-r from-brand-600 to-indigo-600 text-white rounded-xl font-bold hover:shadow-glow hover:shadow-brand-500/40 active:scale-95 transition-all flex items-center"
+                >
+                  {saving ? <RotateCcw className="animate-spin mr-2" size={18} /> : <Save className="mr-2" size={18} />}
+                  Confirm
+                </button>
+              </div>
             </div>
-            <div className="flex gap-2">
-              <button
-                onClick={() => { setLocalItems(items); setModifiedIds(new Set()); }}
-                className="px-4 py-2 text-gray-600 dark:text-gray-300 font-medium hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleSave}
-                disabled={saving}
-                className="px-5 py-2 bg-brand-600 text-white rounded-lg font-bold shadow-md hover:bg-brand-700 active:scale-95 transition-all flex items-center"
-              >
-                {saving ? <RotateCcw className="animate-spin mr-2" size={18} /> : <Check className="mr-2" size={18} />}
-                Save
-              </button>
-            </div>
-          </div>
-        )}
+          )
+        }
+
+        {/* Bulk Import Modal and Toaster stay at the very end */}
+        {
+          showBulkImport && (
+            <BulkImport
+              isOpen={showBulkImport}
+              onClose={() => setShowBulkImport(false)}
+              onImportSuccess={() => {
+                setShowBulkImport(false);
+                refreshInventory();
+              }}
+            />
+          )
+        }
+        <Toaster position="top-right" />
       </div>
 
       {/* Edit Item Modal */}
-      {editingItem && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-md max-h-[90vh] overflow-y-auto">
-            <div className="p-5 border-b dark:border-gray-700 flex items-center justify-between">
-              <h2 className="text-lg font-bold text-gray-900 dark:text-white">Edit Item</h2>
-              <button onClick={closeEditModal} className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg">
-                <X size={20} className="text-gray-500" />
-              </button>
-            </div>
-
-            <div className="p-5 space-y-4">
-              {/* Part Number */}
-              <div>
-                <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1.5">Part Number</label>
-                <input
-                  type="text"
-                  value={editForm.part_number}
-                  onChange={e => setEditForm({ ...editForm, part_number: e.target.value })}
-                  className="w-full p-2.5 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg text-sm dark:text-white font-mono uppercase"
-                />
+      {
+        editingItem && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+            <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-md max-h-[90vh] overflow-y-auto">
+              <div className="p-5 border-b dark:border-gray-700 flex items-center justify-between">
+                <h2 className="text-lg font-bold text-gray-900 dark:text-white">Edit Item</h2>
+                <button onClick={closeEditModal} className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg">
+                  <X size={20} className="text-gray-500" />
+                </button>
               </div>
 
-              {/* Name */}
-              <div>
-                <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1.5">Name</label>
-                <input
-                  type="text"
-                  value={editForm.name}
-                  onChange={e => setEditForm({ ...editForm, name: e.target.value })}
-                  className="w-full p-2.5 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg text-sm dark:text-white"
-                />
-              </div>
-
-              {/* Tags */}
-              <div>
-                <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1.5">Tags</label>
-                <input
-                  type="text"
-                  value={editForm.tags}
-                  onChange={e => setEditForm({ ...editForm, tags: e.target.value })}
-                  placeholder="e.g. Service,LC200,Brakes"
-                  className="w-full p-2.5 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg text-sm dark:text-white"
-                />
-              </div>
-
-              {/* Make/Quality */}
-              <div>
-                <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1.5">Make / Quality</label>
-                <select
-                  value={editForm.make}
-                  onChange={e => setEditForm({ ...editForm, make: e.target.value as PartMake })}
-                  className="w-full p-2.5 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg text-sm dark:text-white"
-                >
-                  <option value="Genuine">Genuine (OEM)</option>
-                  <option value="Japan">Japan (High Quality)</option>
-                  <option value="Aftermarket">Aftermarket</option>
-                </select>
-                <p className="text-xs text-gray-400 mt-1">Parts with same number but different make are stored separately</p>
-              </div>
-
-              {/* Pricing Section */}
-              <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4 space-y-4">
-                <div className="text-xs font-semibold text-gray-600 dark:text-gray-300 flex items-center gap-2">
-                  <Calculator size={14} />
-                  Pricing Calculator
-                </div>
-
-                {/* Buying Price AED */}
+              <div className="p-5 space-y-4">
+                {/* Part Number */}
                 <div>
-                  <label className="block text-xs text-gray-500 mb-1">Buying Price (AED)</label>
+                  <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1.5">Part Number</label>
                   <input
-                    type="number"
-                    step="0.01"
-                    value={editForm.aed_buying_price}
-                    onChange={e => setEditForm({ ...editForm, aed_buying_price: e.target.value })}
-                    className="w-full p-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-lg text-sm dark:text-white"
+                    type="text"
+                    value={editForm.part_number}
+                    onChange={e => setEditForm({ ...editForm, part_number: e.target.value })}
+                    className="w-full p-2.5 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg text-sm dark:text-white font-mono uppercase"
                   />
                 </div>
 
-                {/* Buying Price KSH (Direct) */}
+                {/* Name */}
                 <div>
-                  <label className="block text-xs text-gray-500 mb-1">Buying Price (KSH) - Optional</label>
+                  <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1.5">Name</label>
                   <input
-                    type="number"
-                    step="1"
-                    value={editForm.ksh_buying_price}
-                    onChange={e => setEditForm({ ...editForm, ksh_buying_price: e.target.value })}
-                    placeholder="Direct KSH price if no AED"
-                    className="w-full p-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-lg text-sm dark:text-white"
+                    type="text"
+                    value={editForm.name}
+                    onChange={e => setEditForm({ ...editForm, name: e.target.value })}
+                    className="w-full p-2.5 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg text-sm dark:text-white"
                   />
-                  <p className="text-xs text-gray-400 mt-1">Use when item was purchased directly in KSH</p>
                 </div>
 
-                {/* Calculated Landed Cost */}
-                <div className="bg-blue-50 dark:bg-blue-900/20 p-3 rounded-lg">
-                  <div className="text-xs text-blue-600 dark:text-blue-400">Landed Cost (KES)</div>
-                  <div className="text-xl font-bold text-blue-700 dark:text-blue-300">
-                    KES {editLandedCost.toLocaleString()}
+                {/* Tags */}
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1.5">Tags</label>
+                  <input
+                    type="text"
+                    value={editForm.tags}
+                    onChange={e => setEditForm({ ...editForm, tags: e.target.value })}
+                    placeholder="e.g. Service,LC200,Brakes"
+                    className="w-full p-2.5 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg text-sm dark:text-white"
+                  />
+                </div>
+
+                {/* Make/Quality */}
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1.5">Make / Quality</label>
+                  <select
+                    value={editForm.make}
+                    onChange={e => setEditForm({ ...editForm, make: e.target.value as PartMake })}
+                    className="w-full p-2.5 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg text-sm dark:text-white"
+                  >
+                    <option value="Genuine">Genuine (OEM)</option>
+                    <option value="Japan">Japan (High Quality)</option>
+                    <option value="Aftermarket">Aftermarket</option>
+                  </select>
+                  <p className="text-xs text-gray-400 mt-1">Parts with same number but different make are stored separately</p>
+                </div>
+
+                {/* Pricing Section */}
+                <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4 space-y-4">
+                  <div className="text-xs font-semibold text-gray-600 dark:text-gray-300 flex items-center gap-2">
+                    <Calculator size={14} />
+                    Pricing Calculator
                   </div>
-                  <div className="text-xs text-blue-500 mt-1">
-                    = AED {editForm.aed_buying_price || 0} × {aedRate} × (1 + {conversionPercent}%)
+
+                  {/* Buying Price AED */}
+                  <div>
+                    <label className="block text-xs text-gray-500 mb-1">Buying Price (AED)</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      value={editForm.aed_buying_price}
+                      onChange={e => setEditForm({ ...editForm, aed_buying_price: e.target.value })}
+                      className="w-full p-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-lg text-sm dark:text-white"
+                    />
                   </div>
-                </div>
 
-                {/* Selling Price */}
-                <div>
-                  <label className="block text-xs text-gray-500 mb-1">Selling Price (KES)</label>
-                  <input
-                    type="number"
-                    value={editForm.selling_price}
-                    onChange={e => setEditForm({ ...editForm, selling_price: e.target.value })}
-                    className="w-full p-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-lg text-sm dark:text-white"
-                  />
-                </div>
+                  {/* Buying Price KSH (Direct) */}
+                  <div>
+                    <label className="block text-xs text-gray-500 mb-1">Buying Price (KSH) - Optional</label>
+                    <input
+                      type="number"
+                      step="1"
+                      value={editForm.ksh_buying_price}
+                      onChange={e => setEditForm({ ...editForm, ksh_buying_price: e.target.value })}
+                      placeholder="Direct KSH price if no AED"
+                      className="w-full p-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-lg text-sm dark:text-white"
+                    />
+                    <p className="text-xs text-gray-400 mt-1">Use when item was purchased directly in KSH</p>
+                  </div>
 
-                {/* Profit Preview */}
-                {editLandedCost > 0 && editSellingPrice > 0 && (
-                  <div className={`p-3 rounded-lg ${editProfitMargin > 20 ? 'bg-green-50 dark:bg-green-900/20' : editProfitMargin > 0 ? 'bg-yellow-50 dark:bg-yellow-900/20' : 'bg-red-50 dark:bg-red-900/20'}`}>
-                    <div className="flex justify-between text-sm">
-                      <span className="text-gray-600 dark:text-gray-300">Profit per unit:</span>
-                      <span className={`font-bold ${editProfitMargin > 20 ? 'text-green-600' : editProfitMargin > 0 ? 'text-yellow-600' : 'text-red-600'}`}>
-                        KES {(editSellingPrice - editLandedCost).toLocaleString()} ({editProfitMargin}%)
-                      </span>
+                  {/* Calculated Landed Cost */}
+                  <div className="bg-blue-50 dark:bg-blue-900/20 p-3 rounded-lg">
+                    <div className="text-xs text-blue-600 dark:text-blue-400">Landed Cost (KES)</div>
+                    <div className="text-xl font-bold text-blue-700 dark:text-blue-300">
+                      KES {editLandedCost.toLocaleString()}
+                    </div>
+                    <div className="text-xs text-blue-500 mt-1">
+                      = AED {editForm.aed_buying_price || 0} × {aedRate} × (1 + {conversionPercent}%)
                     </div>
                   </div>
-                )}
+
+                  {/* Selling Price */}
+                  <div>
+                    <label className="block text-xs text-gray-500 mb-1">Selling Price (KES)</label>
+                    <input
+                      type="number"
+                      value={editForm.selling_price}
+                      onChange={e => setEditForm({ ...editForm, selling_price: e.target.value })}
+                      className="w-full p-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-lg text-sm dark:text-white"
+                    />
+                  </div>
+
+                  {/* Profit Preview */}
+                  {editLandedCost > 0 && editSellingPrice > 0 && (
+                    <div className={`p-3 rounded-lg ${editProfitMargin > 20 ? 'bg-green-50 dark:bg-green-900/20' : editProfitMargin > 0 ? 'bg-yellow-50 dark:bg-yellow-900/20' : 'bg-red-50 dark:bg-red-900/20'}`}>
+                      <div className="flex justify-between text-sm">
+                        <span className="text-gray-600 dark:text-gray-300">Profit per unit:</span>
+                        <span className={`font-bold ${editProfitMargin > 20 ? 'text-green-600' : editProfitMargin > 0 ? 'text-yellow-600' : 'text-red-600'}`}>
+                          KES {(editSellingPrice - editLandedCost).toLocaleString()} ({editProfitMargin}%)
+                        </span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Min Stock */}
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1.5">Minimum Stock Level</label>
+                  <input
+                    type="number"
+                    value={editForm.min_stock}
+                    onChange={e => setEditForm({ ...editForm, min_stock: e.target.value })}
+                    className="w-full p-2.5 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg text-sm dark:text-white"
+                  />
+                </div>
               </div>
 
-              {/* Min Stock */}
-              <div>
-                <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1.5">Minimum Stock Level</label>
-                <input
-                  type="number"
-                  value={editForm.min_stock}
-                  onChange={e => setEditForm({ ...editForm, min_stock: e.target.value })}
-                  className="w-full p-2.5 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg text-sm dark:text-white"
-                />
+              <div className="p-5 border-t dark:border-gray-700 flex gap-3">
+                <button
+                  onClick={closeEditModal}
+                  className="flex-1 py-2.5 text-gray-600 dark:text-gray-300 font-medium bg-gray-100 dark:bg-gray-700 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleEditSave}
+                  disabled={editSaving}
+                  className="flex-1 py-2.5 bg-brand-600 text-white font-bold rounded-lg hover:bg-brand-700 flex items-center justify-center"
+                >
+                  {editSaving ? <RotateCcw className="animate-spin mr-2" size={18} /> : <Save className="mr-2" size={18} />}
+                  Save Changes
+                </button>
               </div>
-            </div>
-
-            <div className="p-5 border-t dark:border-gray-700 flex gap-3">
-              <button
-                onClick={closeEditModal}
-                className="flex-1 py-2.5 text-gray-600 dark:text-gray-300 font-medium bg-gray-100 dark:bg-gray-700 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleEditSave}
-                disabled={editSaving}
-                className="flex-1 py-2.5 bg-brand-600 text-white font-bold rounded-lg hover:bg-brand-700 flex items-center justify-center"
-              >
-                {editSaving ? <RotateCcw className="animate-spin mr-2" size={18} /> : <Save className="mr-2" size={18} />}
-                Save Changes
-              </button>
             </div>
           </div>
-        </div>
-      )}
+        )
+      }
 
       {/* Bulk Import Modal */}
-      {showBulkImport && (
-        <BulkImport
-          onComplete={refreshInventory}
-          onClose={() => setShowBulkImport(false)}
-        />
-      )}
-    </Layout>
+      {
+        showBulkImport && (
+          <BulkImport
+            onComplete={refreshInventory}
+            onClose={() => setShowBulkImport(false)}
+          />
+        )
+      }
+    </Layout >
   );
 };
 

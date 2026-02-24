@@ -7,7 +7,9 @@ const rateLimit = require('express-rate-limit');
 const cron = require('node-cron');
 const sheets = require('./services/sheets');
 const sessionService = require('./services/session');
-const cache = require('./services/cache');
+const cache = require('./services/cache'); // Keeping for non-replaced route endpoints if any
+const redisCache = require('./services/redisCache');
+const sheetsWorker = require('./workers/sheetsWorker');
 const { logger, requestIdMiddleware, requestLoggerMiddleware, metrics, metricsMiddleware } = require('./services/logger');
 const { requestTimeout, additionalSecurityHeaders, getLockoutStats } = require('./middleware/security');
 const { sanitizeBody } = require('./middleware/validation');
@@ -122,7 +124,7 @@ app.use('/api/audit', require('./routes/audit'));
 app.get('/api/health', async (req, res) => {
     try {
         const sheetsStatus = await sheets.testConnection();
-        const cacheStats = cache.stats();
+        const cacheStats = { type: 'redis', status: redisCache.redisClient ? redisCache.redisClient.status : 'disconnected' };
 
         res.json({
             status: 'ok',
@@ -166,7 +168,7 @@ app.get('/api/live', (req, res) => {
 app.get('/api/metrics', (req, res) => {
     const metricsData = metrics.getStats();
     const lockoutStats = getLockoutStats();
-    const cacheStats = cache.stats();
+    const cacheStats = { type: 'redis', status: redisCache.redisClient ? redisCache.redisClient.status : 'disconnected' };
 
     res.json({
         ...metricsData,
@@ -272,9 +274,14 @@ const gracefulShutdown = (signal) => {
 
         // Perform cleanup tasks
         Promise.all([
-            // Clean up cache
-            new Promise((resolve) => {
-                cache.invalidateAll();
+            // Clean up cache and worker
+            new Promise(async (resolve) => {
+                try {
+                    if (sheetsWorker) await sheetsWorker.close();
+                    if (redisCache.redisClient) redisCache.redisClient.disconnect();
+                } catch (e) {
+                    console.error('Error during Redis/Worker cleanup', e);
+                }
                 resolve();
             }),
             // Could add database connection cleanup here in future

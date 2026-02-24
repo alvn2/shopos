@@ -1,4 +1,4 @@
-import React, { Component, ErrorInfo, ReactNode } from 'react';
+import React, { ErrorInfo, ReactNode, useState, useEffect, useCallback } from 'react';
 
 interface Props {
     children: ReactNode;
@@ -6,116 +6,99 @@ interface Props {
     onError?: (error: Error, errorInfo: ErrorInfo) => void;
 }
 
-interface State {
-    hasError: boolean;
-    error: Error | null;
-    errorInfo: ErrorInfo | null;
-}
-
 /**
  * Error Boundary Component for ShopOS
  * Catches JavaScript errors in child components and displays a fallback UI
  */
-class ErrorBoundary extends Component<Props, State> {
-    constructor(props: Props) {
-        super(props);
-        this.state = {
-            hasError: false,
-            error: null,
-            errorInfo: null
+const ErrorBoundary: React.FC<Props> = ({ children, fallback, onError }) => {
+    const [hasError, setHasError] = useState(false);
+    const [error, setError] = useState<Error | null>(null);
+    const [errorInfo, setErrorInfo] = useState<ErrorInfo | null>(null);
+
+    const handleError = useCallback((error: Error, info: ErrorInfo) => {
+        setHasError(true);
+        setError(error);
+        setErrorInfo(info);
+        if (onError) {
+            onError(error, info);
+        }
+    }, [onError]);
+
+    useEffect(() => {
+        const errorHandler = (event: ErrorEvent) => {
+            handleError(event.error || new Error(event.message), { componentStack: 'Global Error' } as ErrorInfo);
         };
-    }
+        const promiseRejectionHandler = (event: PromiseRejectionEvent) => {
+            handleError(event.reason instanceof Error ? event.reason : new Error(String(event.reason)), { componentStack: 'Unhandled Promise Rejection' } as ErrorInfo);
+        };
 
-    static getDerivedStateFromError(error: Error): Partial<State> {
-        return { hasError: true, error };
-    }
+        window.addEventListener('error', errorHandler);
+        window.addEventListener('unhandledrejection', promiseRejectionHandler);
 
-    componentDidCatch(error: Error, errorInfo: ErrorInfo) {
-        // Log error to console
-        console.error('ErrorBoundary caught an error:', error, errorInfo);
+        return () => {
+            window.removeEventListener('error', errorHandler);
+            window.removeEventListener('unhandledrejection', promiseRejectionHandler);
+        };
+    }, [handleError]);
 
-        // Update state with error details
-        this.setState({ errorInfo });
 
-        // Call custom error handler if provided
-        if (this.props.onError) {
-            this.props.onError(error, errorInfo);
-        }
-
-        // In production, you could send this to an error tracking service
-        if (import.meta.env.PROD) {
-            // Example: Sentry, LogRocket, etc.
-            // logErrorToService(error, errorInfo);
-        }
-    }
-
-    handleReset = () => {
-        this.setState({
-            hasError: false,
-            error: null,
-            errorInfo: null
-        });
+    const handleReset = () => {
+        setHasError(false);
+        setError(null);
+        setErrorInfo(null);
     };
 
-    handleReload = () => {
-        window.location.reload();
-    };
+    if (hasError) {
+        if (fallback) {
+            return fallback;
+        }
 
-    render() {
-        if (this.state.hasError) {
-            // Use custom fallback if provided
-            if (this.props.fallback) {
-                return this.props.fallback;
-            }
+        return (
+            <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-900 p-6">
+                <div className="glass-panel rounded-3xl p-8 max-w-lg w-full text-center border border-slate-200 dark:border-slate-800 shadow-xl">
+                    <div className="text-rose-500 text-6xl mb-4">⚠️</div>
+                    <h1 className="text-2xl font-black text-slate-800 dark:text-slate-100 mb-2">
+                        Something went wrong
+                    </h1>
+                    <p className="text-slate-500 dark:text-slate-400 mb-6 font-medium">
+                        An unexpected error occurred. Please try refreshing the page.
+                    </p>
 
-            // Default error UI
-            return (
-                <div className="min-h-screen flex items-center justify-center bg-gray-100 p-6">
-                    <div className="bg-white rounded-lg shadow-lg p-8 max-w-lg w-full text-center">
-                        <div className="text-red-500 text-6xl mb-4">⚠️</div>
-                        <h1 className="text-2xl font-bold text-gray-800 mb-2">
-                            Something went wrong
-                        </h1>
-                        <p className="text-gray-600 mb-6">
-                            An unexpected error occurred. Please try refreshing the page.
-                        </p>
-
-                        {/* Error details in development */}
-                        {import.meta.env.DEV && this.state.error && (
-                            <div className="bg-red-50 rounded p-4 mb-6 text-left overflow-auto max-h-48">
-                                <p className="font-mono text-sm text-red-700">
-                                    {this.state.error.toString()}
-                                </p>
-                                {this.state.errorInfo && (
-                                    <pre className="mt-2 text-xs text-red-600 overflow-x-auto">
-                                        {this.state.errorInfo.componentStack}
-                                    </pre>
-                                )}
-                            </div>
-                        )}
-
-                        <div className="flex gap-4 justify-center">
-                            <button
-                                onClick={this.handleReset}
-                                className="px-6 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors"
-                            >
-                                Try Again
-                            </button>
-                            <button
-                                onClick={this.handleReload}
-                                className="px-6 py-2 bg-gray-200 text-gray-700 rounded hover:bg-gray-300 transition-colors"
-                            >
-                                Reload Page
-                            </button>
+                    {/* Error details in development */}
+                    {import.meta.env.DEV && error && (
+                        <div className="bg-rose-50 dark:bg-rose-900/30 rounded-xl p-4 mb-6 text-left overflow-auto max-h-48 border border-rose-100 dark:border-rose-800">
+                            <p className="font-mono text-xs font-bold text-rose-700 dark:text-rose-300">
+                                {error.toString()}
+                            </p>
+                            {errorInfo && (
+                                <pre className="mt-2 text-xs text-rose-600/80 dark:text-rose-400/80 overflow-x-auto">
+                                    {errorInfo.componentStack}
+                                </pre>
+                            )}
                         </div>
+                    )}
+
+                    <div className="flex gap-4 justify-center">
+                        <button
+                            onClick={handleReset}
+                            className="px-6 py-2.5 bg-brand-600 font-bold text-white rounded-xl shadow-[0_0_15px_rgba(37,99,235,0.3)] hover:bg-brand-700 transition-all active:scale-95"
+                        >
+                            Try Again
+                        </button>
+                        <button
+                            onClick={() => window.location.reload()}
+                            className="px-6 py-2.5 bg-slate-200 dark:bg-slate-800 font-bold text-slate-700 dark:text-slate-300 rounded-xl hover:bg-slate-300 dark:hover:bg-slate-700 transition-all active:scale-95"
+                        >
+                            Reload Page
+                        </button>
                     </div>
                 </div>
-            );
-        }
-
-        return this.props.children;
+            </div>
+        );
     }
-}
+
+    return <>{children}</>;
+};
 
 /**
  * Higher-order component variant for wrapping functional components
