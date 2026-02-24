@@ -177,15 +177,13 @@ const AddItem: React.FC = () => {
                                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
                                     Make / Quality *
                                 </label>
-                                <select
+                                <input
+                                    type="text"
                                     value={make}
-                                    onChange={e => setMake(e.target.value as PartMake)}
+                                    onChange={e => setMake(e.target.value)}
+                                    placeholder="e.g. Genuine, Aftermarket, Taiho, MK"
                                     className="w-full p-3 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white focus:ring-2 focus:ring-brand-500 outline-none"
-                                >
-                                    <option value="Genuine">Genuine (OEM)</option>
-                                    <option value="Japan">Japan (High Quality)</option>
-                                    <option value="Aftermarket">Aftermarket</option>
-                                </select>
+                                />
                                 <p className="mt-1 text-xs text-gray-500">
                                     Items with same part number but different make are stored separately
                                 </p>

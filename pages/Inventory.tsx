@@ -466,15 +466,13 @@ const Inventory: React.FC = () => {
                 {/* Make/Quality */}
                 <div>
                   <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1.5">Make / Quality</label>
-                  <select
+                  <input
+                    type="text"
                     value={editForm.make}
-                    onChange={e => setEditForm({ ...editForm, make: e.target.value as PartMake })}
-                    className="w-full p-2.5 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg text-sm dark:text-white"
-                  >
-                    <option value="Genuine">Genuine (OEM)</option>
-                    <option value="Japan">Japan (High Quality)</option>
-                    <option value="Aftermarket">Aftermarket</option>
-                  </select>
+                    onChange={e => setEditForm({ ...editForm, make: e.target.value })}
+                    placeholder="e.g. Genuine, Aftermarket, Taiho, MK"
+                    className="w-full p-2.5 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg text-sm dark:text-white focus:ring-2 focus:ring-brand-500 outline-none"
+                  />
                   <p className="text-xs text-gray-400 mt-1">Parts with same number but different make are stored separately</p>
                 </div>
 

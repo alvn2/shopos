@@ -1,5 +1,6 @@
 import React, { useState, useCallback } from 'react';
 import { Upload, FileSpreadsheet, AlertCircle, CheckCircle, X, Download, RefreshCw } from 'lucide-react';
+import * as XLSX from 'xlsx';
 import { api } from '../../services/api';
 import { PartMake } from '../../types';
 
@@ -91,14 +92,8 @@ const BulkImport: React.FC<BulkImportProps> = ({ onComplete, onClose }) => {
                 continue;
             }
 
-            // Map fuzzy make strings to strict PartMake type
-            const rawMake = (row.make || '').toLowerCase();
-            let make: PartMake = 'Aftermarket';
-            if (rawMake.includes('genuine') || rawMake.includes('oem')) {
-                make = 'Genuine';
-            } else if (rawMake.includes('japan')) {
-                make = 'Japan';
-            }
+            // Accept any make natively directly from the catalog, defaulting to Aftermarket if blank
+            const make: PartMake = (row.make || 'Aftermarket').trim();
 
             // Concatenate additional catalog columns into tags
             const extraTags = [row.tags, row.vehicle_engine, row.description]
@@ -143,28 +138,47 @@ const BulkImport: React.FC<BulkImportProps> = ({ onComplete, onClose }) => {
         setStep('preview');
     }, []);
 
-    const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0];
-        if (!file) return;
+    const processFile = (file: File) => {
+        const fileExt = file.name.split('.').pop()?.toLowerCase();
 
-        const reader = new FileReader();
-        reader.onload = (event) => {
-            const content = event.target?.result as string;
-            parseCSV(content);
-        };
-        reader.readAsText(file);
-    };
-
-    const handleDrop = (e: React.DragEvent) => {
-        e.preventDefault();
-        const file = e.dataTransfer.files[0];
-        if (file && (file.type === 'text/csv' || file.name.endsWith('.csv'))) {
+        if (fileExt === 'csv') {
             const reader = new FileReader();
             reader.onload = (event) => {
                 const content = event.target?.result as string;
                 parseCSV(content);
             };
             reader.readAsText(file);
+        } else if (fileExt === 'xlsx' || fileExt === 'xls') {
+            const reader = new FileReader();
+            reader.onload = (event) => {
+                try {
+                    const data = new Uint8Array(event.target?.result as ArrayBuffer);
+                    const workbook = XLSX.read(data, { type: 'array' });
+                    const firstSheetName = workbook.SheetNames[0];
+                    const worksheet = workbook.Sheets[firstSheetName];
+                    const csvStr = XLSX.utils.sheet_to_csv(worksheet);
+                    parseCSV(csvStr);
+                } catch (e: any) {
+                    setErrors(['Failed to read Excel file: ' + (e.message || 'Unknown error')]);
+                }
+            };
+            reader.readAsArrayBuffer(file);
+        } else {
+            setErrors(['Unsupported file type. Please upload a .CSV, .XLSX, or .XLS file.']);
+        }
+    };
+
+    const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        processFile(file);
+    };
+
+    const handleDrop = (e: React.DragEvent) => {
+        e.preventDefault();
+        const file = e.dataTransfer.files[0];
+        if (file) {
+            processFile(file);
         }
     };
 
@@ -220,13 +234,13 @@ const BulkImport: React.FC<BulkImportProps> = ({ onComplete, onClose }) => {
                             >
                                 <Upload size={48} className="mx-auto text-gray-400 mb-4" />
                                 <p className="text-gray-600 dark:text-gray-300 mb-2">
-                                    Drag & drop a CSV file here, or
+                                    Drag & drop a CSV or Excel file here, or
                                 </p>
                                 <label className="inline-block px-4 py-2 bg-brand-500 text-white rounded-lg cursor-pointer hover:bg-brand-600">
                                     Browse Files
                                     <input
                                         type="file"
-                                        accept=".csv"
+                                        accept=".csv, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, application/vnd.ms-excel"
                                         onChange={handleFileUpload}
                                         className="hidden"
                                     />

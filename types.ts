@@ -25,7 +25,7 @@ export interface Session {
   is_current?: boolean; // Helper for UI
 }
 
-export type PartMake = 'Genuine' | 'Japan' | 'Aftermarket';
+export type PartMake = string; // Allows arbitrary company/brand names like "MK", "Taiho", etc.
 
 export interface InventoryItem {
   uuid: string;
