@@ -92,8 +92,8 @@ const BulkImport: React.FC<BulkImportProps> = ({ onComplete, onClose }) => {
                 continue;
             }
 
-            // Accept any make natively directly from the catalog, defaulting to Aftermarket if blank
-            const make: PartMake = (row.make || 'Aftermarket').trim();
+            // Accept any make natively directly from the catalog, defaulting to Genuine if blank to match local DB defaults
+            const make: PartMake = (row.make || 'Genuine').trim();
 
             // Concatenate additional catalog columns into tags
             const extraTags = [row.tags, row.vehicle_engine, row.description]
@@ -113,10 +113,12 @@ const BulkImport: React.FC<BulkImportProps> = ({ onComplete, onClose }) => {
             });
         }
 
-        // Deduplicate parsed items by part_number and make
+        // Deduplicate parsed items by normalized part_number and make
         const uniqueItemsMap = new Map<string, ImportItem>();
         parsedItems.forEach(item => {
-            const key = `${item.part_number.toUpperCase()}_${item.make}`;
+            const normalizedPartNumber = item.part_number.replace(/[\s\-\/]/g, '').toUpperCase();
+            const normalizedMake = (item.make || 'Genuine').trim().toLowerCase();
+            const key = `${normalizedPartNumber}_${normalizedMake}`;
             if (uniqueItemsMap.has(key)) {
                 const existing = uniqueItemsMap.get(key)!;
                 existing.stock_qty = (existing.stock_qty || 0) + (item.stock_qty || 0);

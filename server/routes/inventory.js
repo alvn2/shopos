@@ -445,13 +445,13 @@ router.post('/bulk-import', requireAdmin, validate('bulkImport', 'body'), async 
         for (let i = 0; i < items.length; i++) {
             const item = items[i];
             try {
-                const partNumberUpper = item.part_number.trim().toUpperCase();
-                const make = item.make || 'Genuine';
+                const partNumberUpper = item.part_number.replace(/[\s\-\/]/g, '').toUpperCase();
+                const make = (item.make || 'Genuine').trim().toLowerCase();
 
                 // Check for existing item with same part_number AND make
                 const existingItem = activeItems.find(existing =>
-                    (existing.Part_Number || '').toUpperCase() === partNumberUpper &&
-                    (existing.Make || 'Genuine') === make
+                    (existing.Part_Number || '').replace(/[\s\-\/]/g, '').toUpperCase() === partNumberUpper &&
+                    (existing.Make || 'Genuine').trim().toLowerCase() === make
                 );
 
                 if (existingItem) {
