@@ -67,7 +67,7 @@ const Layout: React.FC<LayoutProps> = ({ children, title }) => {
             <div className="fixed inset-0 pointer-events-none opacity-40 dark:opacity-20 transition-opacity duration-500 mix-blend-multiply dark:mix-blend-screen bg-mesh-light dark:bg-mesh-dark"></div>
 
             {/* ===== DESKTOP TOP NAV ===== */}
-            <header className="hidden lg:block fixed top-0 left-0 right-0 z-50 glass-panel border-b-0 h-16 transition-all duration-300">
+            <header className="hidden lg:block fixed top-0 left-0 right-0 z-40 glass-panel border-b-0 h-16 transition-all duration-300">
                 <div className="max-w-7xl mx-auto px-6 h-full flex items-center justify-between">
                     {/* Logo + Sync Indicator */}
                     <div className="flex items-center gap-5">
@@ -192,7 +192,7 @@ const Layout: React.FC<LayoutProps> = ({ children, title }) => {
             </header>
 
             {/* ===== MOBILE HEADER ===== */}
-            <header className="lg:hidden fixed top-0 left-0 right-0 z-50 glass-panel border-b-0 h-16 flex items-center justify-between px-5 transition-all duration-300">
+            <header className="lg:hidden fixed top-0 left-0 right-0 z-40 glass-panel border-b-0 h-16 flex items-center justify-between px-5 transition-all duration-300">
                 <div className="flex items-center gap-3">
                     <div className="w-9 h-9 bg-gradient-to-br from-indigo-500 via-brand-500 to-cyan-400 rounded-xl shadow-glow shadow-brand-500/30 flex items-center justify-center">
                         <Package className="text-white" size={18} />
@@ -216,7 +216,7 @@ const Layout: React.FC<LayoutProps> = ({ children, title }) => {
             </main>
 
             {/* ===== MOBILE BOTTOM NAV ===== */}
-            <nav className="lg:hidden fixed bottom-6 left-4 right-4 z-50 glass-dropdown rounded-2xl h-16 border-white/20">
+            <nav className="lg:hidden fixed bottom-6 left-4 right-4 z-40 glass-dropdown rounded-2xl h-16 border-white/20">
                 <div className={`grid h-full ${isWorker ? 'grid-cols-4' : 'grid-cols-5'}`}>
                     <NavLink to="/" className={mobileNavClass} end>
                         <Package size={22} />
