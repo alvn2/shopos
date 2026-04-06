@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect, useCallback, memo } from 'react';
+import React, { useState, useMemo, useEffect, useCallback, memo, useTransition } from 'react';
 import Layout from '../components/common/Layout';
 import BulkImport from '../components/inventory/BulkImport';
 import { useAuth } from '../contexts/AuthContext';
@@ -149,6 +149,7 @@ const Inventory: React.FC = () => {
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [showBulkImport, setShowBulkImport] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
+  const [isPending, startTransition] = useTransition();
 
   // Settings
   const aedRate = settings?.aed_rate || 36.5;
@@ -165,8 +166,10 @@ const Inventory: React.FC = () => {
   // Debounce search to prevent jank on every keystroke
   useEffect(() => {
     const timer = setTimeout(() => {
-      setDebouncedSearch(searchTerm);
-      setCurrentPage(1); // Reset to page 1 on new search
+      startTransition(() => {
+        setDebouncedSearch(searchTerm);
+        setCurrentPage(1); // Reset to page 1 on new search
+      });
     }, 300);
     return () => clearTimeout(timer);
   }, [searchTerm]);
@@ -374,16 +377,17 @@ const Inventory: React.FC = () => {
             )}
           </div>
 
-          <div className="flex bg-slate-100/50 dark:bg-slate-800/50 rounded-xl p-1 gap-1">
-            <button onClick={() => { setFilter('all'); setCurrentPage(1); }} className={`flex-1 py-2.5 px-4 rounded-lg text-sm font-semibold transition-all duration-300 ${filter === 'all' ? 'bg-white text-slate-900 dark:bg-slate-700 dark:text-white shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'}`}>
+          <div className="flex bg-slate-100/50 dark:bg-slate-800/50 rounded-xl p-1 gap-1 relative overflow-hidden">
+            <button onClick={() => startTransition(() => { setFilter('all'); setCurrentPage(1); })} className={`flex-1 py-2.5 px-4 rounded-lg text-sm font-semibold transition-all duration-300 ${filter === 'all' ? 'bg-white text-slate-900 dark:bg-slate-700 dark:text-white shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'}`}>
               All Items
             </button>
-            <button onClick={() => { setFilter('low'); setCurrentPage(1); }} className={`flex-1 py-2.5 px-4 rounded-lg text-sm font-semibold transition-all duration-300 ${filter === 'low' ? 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200 shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'}`}>
+            <button onClick={() => startTransition(() => { setFilter('low'); setCurrentPage(1); })} className={`flex-1 py-2.5 px-4 rounded-lg text-sm font-semibold transition-all duration-300 ${filter === 'low' ? 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200 shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'}`}>
               Low Stock
             </button>
-            <button onClick={() => { setFilter('out'); setCurrentPage(1); }} className={`flex-1 py-2.5 px-4 rounded-lg text-sm font-semibold transition-all duration-300 ${filter === 'out' ? 'bg-rose-100 text-rose-800 dark:bg-rose-900/40 dark:text-rose-200 shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'}`}>
+            <button onClick={() => startTransition(() => { setFilter('out'); setCurrentPage(1); })} className={`flex-1 py-2.5 px-4 rounded-lg text-sm font-semibold transition-all duration-300 ${filter === 'out' ? 'bg-rose-100 text-rose-800 dark:bg-rose-900/40 dark:text-rose-200 shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'}`}>
               Out of Stock
             </button>
+            {isPending && <div className="absolute inset-x-0 bottom-0 h-0.5 bg-brand-500 animate-pulse"></div>}
           </div>
         </div>
 

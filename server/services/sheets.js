@@ -155,7 +155,11 @@ async function updateRow(tabName, filter, updates) {
     }
 
     Object.keys(updates).forEach(key => {
-        row.set(key, updates[key]);
+        if (sheet.headerValues && sheet.headerValues.includes(key)) {
+            row.set(key, updates[key]);
+        } else {
+            console.warn(`[Sheets] Column '${key}' not found in sheet '${tabName}', skipping update for this field.`);
+        }
     });
 
     await row.save();

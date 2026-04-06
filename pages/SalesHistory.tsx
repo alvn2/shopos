@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import Layout from '../components/common/Layout';
 import { api } from '../services/api';
-import { History, Search, Calendar, Download, RefreshCw, ChevronDown, ChevronUp, X } from 'lucide-react';
+import { History, Search, Calendar, Download, RefreshCw, ChevronDown, ChevronUp, X, FileSpreadsheet } from 'lucide-react';
+import * as XLSX from 'xlsx';
 
 interface SaleRecord {
     date: string;
@@ -70,21 +71,23 @@ const SalesHistory: React.FC = () => {
     const formatDate = (iso: string) => new Date(iso).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
     const formatTime = (iso: string) => new Date(iso).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
 
-    const exportCSV = () => {
-        const headers = ['Date', 'Receipt #', 'Items', 'Total (KES)', 'Payment', 'Customer', 'Sold By'];
-        const rows = filteredSales.map(s => [
-            formatDate(s.date), s.batch_id,
-            s.items.map(i => `${i.qty}x ${i.name}`).join('; '),
-            s.total_kes.toString(), s.payment_method, s.customer_name || '', s.sold_by
-        ]);
-        const csv = [headers, ...rows].map(row => row.map(cell => `"${cell}"`).join(',')).join('\n');
-        const blob = new Blob([csv], { type: 'text/csv' });
-        const url = window.URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `sales_history_${new Date().toISOString().split('T')[0]}.csv`;
-        a.click();
-        window.URL.revokeObjectURL(url);
+    const exportToExcel = () => {
+        const data = filteredSales.map(s => ({
+            'Date': formatDate(s.date),
+            'Time': formatTime(s.date),
+            'Receipt #': s.batch_id,
+            'Items': s.items.map(i => `${i.qty}x ${i.name}`).join('; '),
+            'Total (KES)': s.total_kes,
+            'Payment': s.payment_method,
+            'Customer': s.customer_name || '',
+            'Sold By': s.sold_by
+        }));
+
+        const worksheet = XLSX.utils.json_to_sheet(data);
+        const workbook = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(workbook, worksheet, "Sales History");
+
+        XLSX.writeFile(workbook, `Sales_History_${new Date().toISOString().split('T')[0]}.xlsx`);
     };
 
     const paymentBadgeClass = (method: string) => {
@@ -109,9 +112,9 @@ const SalesHistory: React.FC = () => {
                             <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
                             Refresh
                         </button>
-                        <button onClick={exportCSV} className="btn-primary !py-2.5 flex items-center gap-2">
-                            <Download size={16} />
-                            Export CSV
+                        <button onClick={exportToExcel} className="btn-primary !py-2.5 flex items-center gap-2">
+                            <FileSpreadsheet size={16} />
+                            Export Excel
                         </button>
                     </div>
                 </div>

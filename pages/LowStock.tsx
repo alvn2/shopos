@@ -1,7 +1,8 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useMemo } from 'react';
 import Layout from '../components/common/Layout';
 import { useInventory } from '../contexts/InventoryContext';
-import { AlertTriangle, Package, Download, MessageCircle, ArrowUpDown, RefreshCw } from 'lucide-react';
+import { AlertTriangle, Package, Download, MessageCircle, ArrowUpDown, RefreshCw, FileSpreadsheet } from 'lucide-react';
+import * as XLSX from 'xlsx';
 
 const LowStock: React.FC = () => {
     const { items, loading, refreshInventory } = useInventory();
@@ -35,20 +36,21 @@ const LowStock: React.FC = () => {
         window.open(`https://wa.me/?text=${message}`, '_blank');
     };
 
-    const exportCSV = () => {
-        const headers = ['Part Number', 'Name', 'Current Stock', 'Min Stock', 'Suggested Order'];
-        const rows = lowStockItems.map(item => [
-            item.part_number, item.name, item.stock_qty.toString(),
-            item.min_stock.toString(), (item.min_stock * 2).toString()
-        ]);
-        const csv = [headers, ...rows].map(row => row.join(',')).join('\n');
-        const blob = new Blob([csv], { type: 'text/csv' });
-        const url = window.URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `low_stock_${new Date().toISOString().split('T')[0]}.csv`;
-        a.click();
-        window.URL.revokeObjectURL(url);
+    const exportToExcel = () => {
+        const data = lowStockItems.map(item => ({
+            'Part Number': item.part_number,
+            'Make': item.make,
+            'Name': item.name,
+            'Current Stock': item.stock_qty,
+            'Min Stock': item.min_stock,
+            'Suggested Order': item.min_stock * 2 > item.stock_qty ? (item.min_stock * 2) - item.stock_qty : item.min_stock * 2
+        }));
+
+        const worksheet = XLSX.utils.json_to_sheet(data);
+        const workbook = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(workbook, worksheet, "Things to Buy");
+        
+        XLSX.writeFile(workbook, `Shopping_List_${new Date().toISOString().split('T')[0]}.xlsx`);
     };
 
     return (
@@ -88,9 +90,9 @@ const LowStock: React.FC = () => {
                         <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
                         Refresh
                     </button>
-                    <button onClick={exportCSV} className="flex-1 btn-primary flex items-center justify-center gap-2">
-                        <Download size={16} />
-                        Export CSV
+                    <button onClick={exportToExcel} className="flex-1 btn-primary flex items-center justify-center gap-2">
+                        <FileSpreadsheet size={16} />
+                        Export Excel
                     </button>
                 </div>
 
