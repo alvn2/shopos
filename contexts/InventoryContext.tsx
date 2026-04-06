@@ -9,6 +9,8 @@ interface InventoryContextType {
   settings: Settings | null;
   refreshInventory: () => Promise<void>;
   updateLocalItem: (uuid: string, updates: Partial<InventoryItem>) => void;
+  addLocalItem: (item: InventoryItem) => void;
+  removeLocalItem: (uuid: string) => void;
 }
 
 const InventoryContext = createContext<InventoryContextType | undefined>(undefined);
@@ -42,12 +44,22 @@ export const InventoryProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     }
   }, [isAuthenticated, fetchInventory]);
 
-  const updateLocalItem = (uuid: string, updates: Partial<InventoryItem>) => {
+  const updateLocalItem = useCallback((uuid: string, updates: Partial<InventoryItem>) => {
     setItems(prev => prev.map(item => item.uuid === uuid ? { ...item, ...updates } : item));
-  };
+  }, []);
+
+  // Optimistic add - instantly adds item to local state without re-fetching
+  const addLocalItem = useCallback((item: InventoryItem) => {
+    setItems(prev => [item, ...prev]);
+  }, []);
+
+  // Optimistic remove - instantly removes item from local state
+  const removeLocalItem = useCallback((uuid: string) => {
+    setItems(prev => prev.filter(item => item.uuid !== uuid));
+  }, []);
 
   return (
-    <InventoryContext.Provider value={{ items, loading, settings, refreshInventory: fetchInventory, updateLocalItem }}>
+    <InventoryContext.Provider value={{ items, loading, settings, refreshInventory: fetchInventory, updateLocalItem, addLocalItem, removeLocalItem }}>
       {children}
     </InventoryContext.Provider>
   );

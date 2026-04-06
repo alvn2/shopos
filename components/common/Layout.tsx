@@ -1,6 +1,6 @@
-import React from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
-import { Package, FileText, BarChart2, ClipboardList, AlertTriangle, Plus, Settings, LogOut, User, ChevronDown, Smartphone, History } from 'lucide-react';
+import { Package, FileText, BarChart2, ClipboardList, AlertTriangle, Plus, Settings, LogOut, User, ChevronDown, Smartphone, History, Moon, Sun } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { SyncIndicator } from '../../contexts/OfflineContext';
 import { UserRole } from '../../types';
@@ -18,8 +18,31 @@ interface LayoutProps {
 const Layout: React.FC<LayoutProps> = ({ children, title }) => {
     const { user, logout } = useAuth();
     const navigate = useNavigate();
-    const [userMenuOpen, setUserMenuOpen] = React.useState(false);
+    const [userMenuOpen, setUserMenuOpen] = useState(false);
     const isWorker = user?.role === UserRole.WORKER;
+
+    // Dark mode state — persisted to localStorage
+    const [isDark, setIsDark] = useState(() => {
+        if (typeof window !== 'undefined') {
+            const saved = localStorage.getItem('shopos-theme');
+            if (saved) return saved === 'dark';
+            return window.matchMedia('(prefers-color-scheme: dark)').matches;
+        }
+        return true; // default dark
+    });
+
+    useEffect(() => {
+        const root = document.documentElement;
+        if (isDark) {
+            root.classList.add('dark');
+            localStorage.setItem('shopos-theme', 'dark');
+        } else {
+            root.classList.remove('dark');
+            localStorage.setItem('shopos-theme', 'light');
+        }
+    }, [isDark]);
+
+    const toggleDark = useCallback(() => setIsDark(prev => !prev), []);
 
     const handleLogout = async () => {
         await logout();
@@ -89,6 +112,20 @@ const Layout: React.FC<LayoutProps> = ({ children, title }) => {
                         </NavLink>
                     </nav>
 
+                    {/* Dark Mode + User Menu */}
+                    <div className="flex items-center gap-2">
+                    <button
+                        onClick={toggleDark}
+                        className="p-2.5 rounded-xl glass-panel hover:shadow-md transition-all duration-300 group"
+                        title={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
+                    >
+                        {isDark ? (
+                            <Sun size={18} className="text-amber-400 group-hover:rotate-45 transition-transform duration-500" />
+                        ) : (
+                            <Moon size={18} className="text-slate-500 group-hover:-rotate-12 transition-transform duration-500" />
+                        )}
+                    </button>
+
                     {/* User Menu */}
                     <div className="relative">
                         <button
@@ -150,6 +187,7 @@ const Layout: React.FC<LayoutProps> = ({ children, title }) => {
                             </>
                         )}
                     </div>
+                    </div> {/* end flex items-center gap-2 */}
                 </div>
             </header>
 
@@ -161,7 +199,15 @@ const Layout: React.FC<LayoutProps> = ({ children, title }) => {
                     </div>
                     <span className="font-extrabold text-lg tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-slate-900 to-slate-600 dark:from-white dark:to-slate-400">{title || 'ShopOS'}</span>
                 </div>
-                <SyncIndicator />
+                <div className="flex items-center gap-2">
+                    <button
+                        onClick={toggleDark}
+                        className="p-2 rounded-lg hover:bg-slate-200/50 dark:hover:bg-slate-700/50 transition-colors"
+                    >
+                        {isDark ? <Sun size={18} className="text-amber-400" /> : <Moon size={18} className="text-slate-500" />}
+                    </button>
+                    <SyncIndicator />
+                </div>
             </header>
 
             {/* ===== MAIN CONTENT ===== */}

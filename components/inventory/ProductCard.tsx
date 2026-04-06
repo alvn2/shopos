@@ -15,13 +15,14 @@ const ProductCard: React.FC<ProductCardProps> = ({ item }) => {
 
   const isAdmin = user?.role === UserRole.ADMIN;
 
-  // Calculations based on settings
-  const exchangeRate = settings?.aed_exchange_rate || 36.5;
-  const overhead = settings?.overhead_factor || 1.35;
+  // Calculations based on settings - FIXED field names
+  const exchangeRate = settings?.aed_rate || 36.5;
+  const conversionPercent = settings?.conversion_percent || 13;
+  const overheadFactor = 1 + conversionPercent / 100;
 
-  const landedCost = item.aed_buying_price * exchangeRate * overhead;
+  const landedCost = item.aed_buying_price * exchangeRate * overheadFactor;
   const profit = item.selling_price - landedCost;
-  const margin = (profit / item.selling_price) * 100;
+  const margin = item.selling_price > 0 ? (profit / item.selling_price) * 100 : 0;
 
   // Stock Status Logic
   let StockIcon = CheckCircle;
@@ -108,7 +109,7 @@ const ProductCard: React.FC<ProductCardProps> = ({ item }) => {
               </span>
             </div>
             <div className="text-[10px] text-slate-400 mt-3 pt-2 font-mono uppercase text-center border-t border-dashed border-slate-200 dark:border-slate-700">
-              AED × {exchangeRate} × {overhead}
+              AED × {exchangeRate} × {overheadFactor.toFixed(2)}
             </div>
           </div>
         </div>

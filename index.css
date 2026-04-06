@@ -3,6 +3,10 @@
 @tailwind utilities;
 
 @layer base {
+  * {
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  }
+
   body {
     @apply bg-slate-50 text-slate-900 antialiased selection:bg-brand-200 selection:text-brand-900;
   }
@@ -10,7 +14,6 @@
   /* Dark mode specific backgrounds */
   .dark body {
     @apply bg-slate-950 text-slate-100 selection:bg-brand-900 selection:text-brand-100;
-    /* Optional mesh/gradient effect on dark body for depth */
     background-image: radial-gradient(circle at top right, rgba(99, 102, 241, 0.05) 0%, transparent 40%),
       radial-gradient(circle at bottom left, rgba(168, 85, 247, 0.05) 0%, transparent 40%);
     background-attachment: fixed;
@@ -30,7 +33,7 @@
   @apply bg-slate-300 dark:bg-slate-700/50 rounded-full hover:bg-slate-400 dark:hover:bg-slate-600 transition-colors duration-200;
 }
 
-/* Glassmorphism utility classes to supplement Tailwind */
+/* Glassmorphism utility classes */
 .glass-panel {
   @apply bg-white/70 dark:bg-slate-900/60 backdrop-blur-xl border border-white/20 dark:border-white/5 shadow-glass;
 }
@@ -42,4 +45,64 @@
 /* Smooth enter transitions */
 .animate-enter {
   animation: scaleIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* Success checkmark animation */
+@keyframes successPop {
+  0% { transform: scale(0); opacity: 0; }
+  50% { transform: scale(1.2); }
+  100% { transform: scale(1); opacity: 1; }
+}
+.animate-success-pop {
+  animation: successPop 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* Slide in from right */
+@keyframes slideInRight {
+  0% { transform: translateX(100%); opacity: 0; }
+  100% { transform: translateX(0); opacity: 1; }
+}
+.animate-slide-in-right {
+  animation: slideInRight 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* Slide up from bottom */
+@keyframes slideUp {
+  0% { transform: translateY(20px); opacity: 0; }
+  100% { transform: translateY(0); opacity: 1; }
+}
+.animate-slide-up {
+  animation: slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* Skeleton shimmer for loading states */
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+.skeleton {
+  @apply bg-slate-200 dark:bg-slate-700 rounded-lg;
+  background: linear-gradient(90deg, transparent 25%, rgba(255,255,255,0.3) 50%, transparent 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+}
+
+/* Form input focus ring */
+.input-modern {
+  @apply w-full px-4 py-3 bg-slate-50/80 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white placeholder-slate-400 focus:ring-2 focus:ring-brand-500/50 focus:border-brand-500 outline-none transition-all duration-200 shadow-inner text-sm font-medium;
+}
+
+/* Card base style */
+.card-modern {
+  @apply bg-white dark:bg-slate-800/90 rounded-2xl border border-slate-200/60 dark:border-slate-700/50 shadow-sm transition-all duration-300;
+}
+
+/* Button primary */
+.btn-primary {
+  @apply px-6 py-3 bg-gradient-to-r from-brand-600 to-indigo-600 hover:from-brand-500 hover:to-indigo-500 text-white font-bold rounded-xl transition-all duration-300 shadow-glow shadow-brand-500/25 flex items-center justify-center hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-y-0;
+}
+
+/* Button secondary */
+.btn-secondary {
+  @apply px-6 py-3 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 rounded-xl hover:shadow-lg dark:hover:bg-slate-700 shadow-sm border border-slate-200/50 dark:border-slate-700/50 transition-all duration-300 font-semibold;
 }

@@ -3,7 +3,8 @@ import Layout from '../components/common/Layout';
 import { useAuth } from '../contexts/AuthContext';
 import { api } from '../services/api';
 import { Settings, User, UserRole } from '../types';
-import { Save, Calculator, Users, Settings as SettingsIcon, Key, Trash2, Plus, Check, X, AlertCircle, RefreshCw } from 'lucide-react';
+import { Save, Calculator, Users, Settings as SettingsIcon, Key, Trash2, Plus, Check, X, AlertCircle, RefreshCw, Database, Download, HardDrive } from 'lucide-react';
+import { Toaster, toast } from 'react-hot-toast';
 
 type TabType = 'rates' | 'users' | 'system';
 
@@ -15,7 +16,6 @@ const SettingsPage: React.FC = () => {
   const [settings, setSettings] = useState<Settings | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [message, setMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
 
   // Local edit state
   const [aedRate, setAedRate] = useState('36.5');
@@ -64,17 +64,15 @@ const SettingsPage: React.FC = () => {
 
   const handleSaveSettings = async () => {
     setSaving(true);
-    setMessage(null);
     try {
       await api.settings.update({
         aed_rate: parseFloat(aedRate) || 36.5,
         conversion_percent: parseFloat(conversionPercent) || 13,
         default_min_stock: parseInt(defaultMinStock) || 5
       });
-      setMessage({ type: 'success', text: 'Settings saved!' });
-      setTimeout(() => setMessage(null), 3000);
+      toast.success('Settings saved successfully!');
     } catch (e) {
-      setMessage({ type: 'error', text: 'Failed to save settings' });
+      toast.error('Failed to save settings');
     } finally {
       setSaving(false);
     }
@@ -82,7 +80,7 @@ const SettingsPage: React.FC = () => {
 
   const handleCreateUser = async () => {
     if (!newUser.username || !newUser.password || !newUser.full_name) {
-      setMessage({ type: 'error', text: 'Fill all fields' });
+      toast.error('Please fill in all fields');
       return;
     }
     try {
@@ -95,9 +93,9 @@ const SettingsPage: React.FC = () => {
       setNewUser({ username: '', password: '', full_name: '', role: UserRole.COUNTER });
       setShowNewUser(false);
       loadUsers();
-      setMessage({ type: 'success', text: 'User created!' });
+      toast.success('User created successfully!');
     } catch (e: any) {
-      setMessage({ type: 'error', text: e.message || 'Failed to create user' });
+      toast.error(e.message || 'Failed to create user');
     }
   };
 
@@ -105,8 +103,9 @@ const SettingsPage: React.FC = () => {
     try {
       await api.users.update(username, { is_active: !isActive });
       loadUsers();
+      toast.success(`User ${!isActive ? 'enabled' : 'disabled'}`);
     } catch (e) {
-      console.error(e);
+      toast.error('Failed to update user');
     }
   };
 
@@ -116,24 +115,43 @@ const SettingsPage: React.FC = () => {
       await api.users.update(username, { password_hash: newPassword });
       setChangingPassword(null);
       setNewPassword('');
-      setMessage({ type: 'success', text: 'Password updated!' });
+      toast.success('Password updated!');
     } catch (e: any) {
-      setMessage({ type: 'error', text: e.message || 'Failed to update password' });
+      toast.error(e.message || 'Failed to update password');
     }
   };
 
   const handleDeleteUser = async (username: string) => {
     if (username === 'admin') {
-      setMessage({ type: 'error', text: 'Cannot delete admin user' });
+      toast.error('Cannot delete admin user');
       return;
     }
-    if (!confirm(`Delete user "${username}"?`)) return;
-    try {
-      await api.users.delete(username);
-      loadUsers();
-    } catch (e) {
-      console.error(e);
-    }
+    toast((t) => (
+      <div className="flex items-center gap-3">
+        <AlertCircle size={18} className="text-rose-500 shrink-0" />
+        <div>
+          <p className="font-semibold text-sm">Delete user "{username}"?</p>
+        </div>
+        <div className="flex gap-2 ml-2">
+          <button onClick={() => toast.dismiss(t.id)} className="px-3 py-1.5 text-xs font-medium bg-slate-600 rounded-lg text-white">Cancel</button>
+          <button
+            onClick={async () => {
+              toast.dismiss(t.id);
+              try {
+                await api.users.delete(username);
+                loadUsers();
+                toast.success('User deleted');
+              } catch (e) {
+                toast.error('Failed to delete user');
+              }
+            }}
+            className="px-3 py-1.5 text-xs font-bold bg-rose-500 text-white rounded-lg"
+          >
+            Delete
+          </button>
+        </div>
+      </div>
+    ), { duration: 8000 });
   };
 
   // Calculate landed cost
@@ -147,25 +165,19 @@ const SettingsPage: React.FC = () => {
 
   return (
     <Layout title="Settings">
-      <div className="p-4 lg:p-6 max-w-3xl mx-auto">
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-6">Settings</h1>
-
-        {/* Message */}
-        {message && (
-          <div className={`mb-4 p-3 rounded-lg flex items-center gap-2 ${message.type === 'success' ? 'bg-green-50 text-green-800 dark:bg-green-900/30 dark:text-green-200' : 'bg-red-50 text-red-800 dark:bg-red-900/30 dark:text-red-200'}`}>
-            {message.type === 'success' ? <Check size={18} /> : <AlertCircle size={18} />}
-            {message.text}
-            <button onClick={() => setMessage(null)} className="ml-auto"><X size={16} /></button>
-          </div>
-        )}
+      <div className="p-4 lg:p-8 max-w-3xl mx-auto space-y-6 animate-enter">
+        <div>
+          <h1 className="text-3xl font-extrabold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-slate-900 to-slate-600 dark:from-white dark:to-slate-400">Settings</h1>
+          <p className="text-slate-500 dark:text-slate-400 mt-2 font-medium">Manage rates, users, and system settings</p>
+        </div>
 
         {/* Tabs */}
-        <div className="flex gap-2 mb-6 border-b dark:border-gray-700 pb-2">
+        <div className="flex bg-slate-100/50 dark:bg-slate-800/50 rounded-xl p-1 gap-1">
           {tabs.map(tab => (
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
-              className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors ${activeTab === tab.id ? 'bg-brand-100 text-brand-700 dark:bg-brand-900 dark:text-brand-300' : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'}`}
+              className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-lg font-bold transition-all duration-300 ${activeTab === tab.id ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'}`}
             >
               {tab.icon}
               {tab.label}
@@ -177,80 +189,68 @@ const SettingsPage: React.FC = () => {
         {activeTab === 'rates' && (
           <div className="space-y-6">
             {/* Calculator Card */}
-            <div className="bg-gradient-to-br from-gray-900 to-gray-800 text-white rounded-xl shadow-lg p-5">
-              <div className="flex items-center gap-2 mb-4">
-                <Calculator size={20} className="text-brand-400" />
-                <h2 className="font-bold text-lg">Dubai Cost Calculator</h2>
-              </div>
+            <div className="relative overflow-hidden bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-900 text-white rounded-2xl shadow-xl p-6">
+              <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-500/10 rounded-full -translate-y-1/2 translate-x-1/4 blur-3xl pointer-events-none" />
+              <div className="relative">
+                <div className="flex items-center gap-2.5 mb-5">
+                  <div className="p-2 bg-white/10 rounded-lg backdrop-blur-xl">
+                    <Calculator size={20} className="text-brand-400" />
+                  </div>
+                  <h2 className="font-bold text-lg">Dubai Cost Calculator</h2>
+                </div>
 
-              <div className="flex gap-4 mb-4">
-                <div className="flex-1">
-                  <label className="text-xs text-gray-400 block mb-1">AED Price</label>
-                  <input
-                    type="number"
-                    value={calcAed}
-                    onChange={e => setCalcAed(e.target.value)}
-                    className="w-full bg-white/10 border border-white/20 rounded-lg px-3 py-2 text-white font-mono focus:ring-2 focus:ring-brand-500 outline-none"
-                  />
-                </div>
-                <div className="flex items-end pb-2">
-                  <span className="text-2xl text-gray-500 font-light">→</span>
-                </div>
-                <div className="flex-1">
-                  <label className="text-xs text-brand-300 block mb-1">Landed KES</label>
-                  <div className="w-full bg-brand-900/40 border border-brand-500/30 rounded-lg px-3 py-2 text-brand-300 font-mono font-bold text-lg">
-                    {calcLandedCost.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                <div className="flex gap-4 mb-4 items-end">
+                  <div className="flex-1 space-y-1.5">
+                    <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">AED Price</label>
+                    <input
+                      type="number"
+                      value={calcAed}
+                      onChange={e => setCalcAed(e.target.value)}
+                      className="w-full bg-white/10 border border-white/20 rounded-xl px-4 py-3 text-white font-mono font-bold focus:ring-2 focus:ring-brand-500 outline-none backdrop-blur-xl"
+                    />
+                  </div>
+                  <div className="flex items-center pb-3">
+                    <span className="text-2xl text-slate-500 font-bold">→</span>
+                  </div>
+                  <div className="flex-1 space-y-1.5">
+                    <label className="text-xs font-bold text-brand-300 uppercase tracking-wider">Landed KES</label>
+                    <div className="w-full bg-brand-600/20 border border-brand-500/30 rounded-xl px-4 py-3 text-brand-300 font-mono font-extrabold text-xl backdrop-blur-xl">
+                      {calcLandedCost.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                    </div>
                   </div>
                 </div>
-              </div>
-              <div className="text-xs text-gray-400">
-                Formula: AED × {aedRate} × (1 + {conversionPercent}%) = KES
+                <div className="text-xs text-slate-500 font-mono">
+                  Formula: AED × {aedRate} × (1 + {conversionPercent}%) = KES
+                </div>
               </div>
             </div>
 
             {/* Rate Settings */}
-            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-5 space-y-4">
-              <h3 className="font-semibold text-gray-900 dark:text-white">Conversion Rates</h3>
+            <div className="card-modern p-5 lg:p-6 space-y-5">
+              <h3 className="font-bold text-lg text-slate-900 dark:text-white">Conversion Rates</h3>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">AED Exchange Rate (KES per 1 AED)</label>
-                <input
-                  type="number"
-                  step="0.1"
-                  value={aedRate}
-                  onChange={e => setAedRate(e.target.value)}
-                  className="w-full p-2.5 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg dark:text-white"
-                />
+              <div className="space-y-1.5">
+                <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider pl-1">AED Exchange Rate (KES per 1 AED)</label>
+                <input type="number" step="0.1" value={aedRate} onChange={e => setAedRate(e.target.value)} className="input-modern" />
               </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Import/Conversion Percentage (%)</label>
-                <input
-                  type="number"
-                  step="1"
-                  value={conversionPercent}
-                  onChange={e => setConversionPercent(e.target.value)}
-                  className="w-full p-2.5 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg dark:text-white"
-                />
-                <p className="text-xs text-gray-500 mt-1">E.g., 13% for shipping, customs, and handling overhead</p>
+              <div className="space-y-1.5">
+                <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider pl-1">Import/Conversion Percentage (%)</label>
+                <input type="number" step="1" value={conversionPercent} onChange={e => setConversionPercent(e.target.value)} className="input-modern" />
+                <p className="text-xs text-slate-400 pl-1 mt-1">E.g., 13% for shipping, customs, and handling overhead</p>
               </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Default Min Stock Alert</label>
-                <input
-                  type="number"
-                  value={defaultMinStock}
-                  onChange={e => setDefaultMinStock(e.target.value)}
-                  className="w-full p-2.5 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg dark:text-white"
-                />
+              <div className="space-y-1.5">
+                <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider pl-1">Default Min Stock Alert</label>
+                <input type="number" value={defaultMinStock} onChange={e => setDefaultMinStock(e.target.value)} className="input-modern" />
               </div>
 
               <button
                 onClick={handleSaveSettings}
                 disabled={saving}
-                className="w-full py-3 bg-brand-600 text-white rounded-lg font-bold hover:bg-brand-700 flex items-center justify-center gap-2"
+                className="w-full btn-primary"
               >
-                {saving ? <RefreshCw className="animate-spin" size={18} /> : <Save size={18} />}
+                {saving ? <RefreshCw className="animate-spin mr-2" size={18} /> : <Save size={18} className="mr-2" />}
                 Save Settings
               </button>
             </div>
@@ -263,7 +263,7 @@ const SettingsPage: React.FC = () => {
             {/* Add User Button */}
             <button
               onClick={() => setShowNewUser(true)}
-              className="w-full py-3 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-xl text-gray-600 dark:text-gray-400 font-medium hover:border-brand-500 hover:text-brand-500 flex items-center justify-center gap-2"
+              className="w-full py-4 border-2 border-dashed border-slate-300 dark:border-slate-600 rounded-2xl text-slate-500 dark:text-slate-400 font-bold hover:border-brand-500 hover:text-brand-500 flex items-center justify-center gap-2 transition-colors"
             >
               <Plus size={20} />
               Add New User
@@ -271,101 +271,76 @@ const SettingsPage: React.FC = () => {
 
             {/* New User Form */}
             {showNewUser && (
-              <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-5 space-y-4">
-                <h3 className="font-semibold text-gray-900 dark:text-white">New User</h3>
+              <div className="card-modern p-5 space-y-4 animate-slide-up">
+                <h3 className="font-bold text-lg text-slate-900 dark:text-white">New User</h3>
                 <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-xs text-gray-500 mb-1">Username</label>
-                    <input
-                      type="text"
-                      value={newUser.username}
-                      onChange={e => setNewUser({ ...newUser, username: e.target.value })}
-                      className="w-full p-2.5 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg dark:text-white text-sm"
-                    />
+                  <div className="space-y-1.5">
+                    <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider">Username</label>
+                    <input type="text" value={newUser.username} onChange={e => setNewUser({ ...newUser, username: e.target.value })} className="input-modern" />
                   </div>
-                  <div>
-                    <label className="block text-xs text-gray-500 mb-1">Password</label>
-                    <input
-                      type="password"
-                      value={newUser.password}
-                      onChange={e => setNewUser({ ...newUser, password: e.target.value })}
-                      className="w-full p-2.5 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg dark:text-white text-sm"
-                    />
+                  <div className="space-y-1.5">
+                    <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider">Password</label>
+                    <input type="password" value={newUser.password} onChange={e => setNewUser({ ...newUser, password: e.target.value })} className="input-modern" />
                   </div>
-                  <div>
-                    <label className="block text-xs text-gray-500 mb-1">Full Name</label>
-                    <input
-                      type="text"
-                      value={newUser.full_name}
-                      onChange={e => setNewUser({ ...newUser, full_name: e.target.value })}
-                      className="w-full p-2.5 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg dark:text-white text-sm"
-                    />
+                  <div className="space-y-1.5">
+                    <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider">Full Name</label>
+                    <input type="text" value={newUser.full_name} onChange={e => setNewUser({ ...newUser, full_name: e.target.value })} className="input-modern" />
                   </div>
-                  <div>
-                    <label className="block text-xs text-gray-500 mb-1">Role</label>
-                    <select
-                      value={newUser.role}
-                      onChange={e => setNewUser({ ...newUser, role: e.target.value as UserRole })}
-                      className="w-full p-2.5 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg dark:text-white text-sm"
-                    >
+                  <div className="space-y-1.5">
+                    <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider">Role</label>
+                    <select value={newUser.role} onChange={e => setNewUser({ ...newUser, role: e.target.value as UserRole })} className="input-modern">
                       <option value={UserRole.COUNTER}>Counter</option>
                       <option value={UserRole.WORKER}>Worker</option>
                       <option value={UserRole.ADMIN}>Admin</option>
                     </select>
                   </div>
                 </div>
-                <div className="flex gap-3">
-                  <button onClick={() => setShowNewUser(false)} className="flex-1 py-2 bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 rounded-lg font-medium">Cancel</button>
-                  <button onClick={handleCreateUser} className="flex-1 py-2 bg-brand-600 text-white rounded-lg font-bold">Create User</button>
+                <div className="flex gap-3 pt-2">
+                  <button onClick={() => setShowNewUser(false)} className="flex-1 btn-secondary">Cancel</button>
+                  <button onClick={handleCreateUser} className="flex-1 btn-primary">Create User</button>
                 </div>
               </div>
             )}
 
             {/* Users List */}
             {users.map(u => (
-              <div key={u.username} className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-4">
+              <div key={u.username} className="card-modern p-5">
                 <div className="flex items-center justify-between mb-3">
-                  <div>
-                    <span className="font-semibold text-gray-900 dark:text-white">{u.full_name}</span>
-                    <span className="text-sm text-gray-500 ml-2">@{u.username}</span>
-                    <span className={`ml-2 text-xs px-2 py-0.5 rounded ${u.role === 'admin' ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300' : 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400'}`}>
+                  <div className="flex items-center gap-3 flex-wrap">
+                    <span className="font-bold text-slate-900 dark:text-white text-lg">{u.full_name}</span>
+                    <span className="text-sm text-slate-500 font-mono">@{u.username}</span>
+                    <span className={`text-xs font-bold px-2.5 py-1 rounded-md border ${u.role === 'admin' ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300 border-purple-200 dark:border-purple-800/50' : 'bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-400 border-slate-200 dark:border-slate-600'}`}>
                       {u.role}
                     </span>
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div>
                     {u.is_active !== false ? (
-                      <span className="text-xs bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300 px-2 py-1 rounded">Active</span>
+                      <span className="text-xs font-bold bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300 px-2.5 py-1 rounded-md border border-emerald-200 dark:border-emerald-800/50">Active</span>
                     ) : (
-                      <span className="text-xs bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300 px-2 py-1 rounded">Disabled</span>
+                      <span className="text-xs font-bold bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-300 px-2.5 py-1 rounded-md border border-rose-200 dark:border-rose-800/50">Disabled</span>
                     )}
                   </div>
                 </div>
 
                 {/* Password Change */}
                 {changingPassword === u.username ? (
-                  <div className="flex gap-2 mt-3">
-                    <input
-                      type="password"
-                      placeholder="New password"
-                      value={newPassword}
-                      onChange={e => setNewPassword(e.target.value)}
-                      className="flex-1 p-2 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg text-sm dark:text-white"
-                    />
-                    <button onClick={() => handleChangePassword(u.username)} className="px-3 py-2 bg-brand-600 text-white rounded-lg text-sm font-medium">Save</button>
-                    <button onClick={() => { setChangingPassword(null); setNewPassword(''); }} className="px-3 py-2 bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 rounded-lg text-sm">Cancel</button>
+                  <div className="flex gap-2 mt-3 animate-slide-up">
+                    <input type="password" placeholder="New password" value={newPassword} onChange={e => setNewPassword(e.target.value)} className="flex-1 input-modern !py-2.5" />
+                    <button onClick={() => handleChangePassword(u.username)} className="px-4 py-2.5 btn-primary !rounded-xl !text-sm">Save</button>
+                    <button onClick={() => { setChangingPassword(null); setNewPassword(''); }} className="px-4 py-2.5 btn-secondary !rounded-xl !text-sm">Cancel</button>
                   </div>
                 ) : (
                   <div className="flex gap-2 mt-3">
-                    <button onClick={() => setChangingPassword(u.username)} className="flex-1 py-2 bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 rounded-lg text-sm font-medium flex items-center justify-center gap-1">
+                    <button onClick={() => setChangingPassword(u.username)} className="flex-1 btn-secondary !py-2.5 flex items-center justify-center gap-2 !text-sm">
                       <Key size={14} />
                       Change Password
                     </button>
                     {u.username !== 'admin' && (
                       <>
-                        <button onClick={() => handleToggleUser(u.username, u.is_active !== false)} className="py-2 px-3 bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 rounded-lg text-sm">
+                        <button onClick={() => handleToggleUser(u.username, u.is_active !== false)} className="btn-secondary !py-2.5 !text-sm">
                           {u.is_active !== false ? 'Disable' : 'Enable'}
                         </button>
-                        <button onClick={() => handleDeleteUser(u.username)} className="py-2 px-3 bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 rounded-lg text-sm">
+                        <button onClick={() => handleDeleteUser(u.username)} className="py-2.5 px-3 bg-rose-100 dark:bg-rose-900/30 text-rose-600 dark:text-rose-400 rounded-xl text-sm hover:bg-rose-200 dark:hover:bg-rose-900/50 transition-colors">
                           <Trash2 size={16} />
                         </button>
                       </>
@@ -381,30 +356,38 @@ const SettingsPage: React.FC = () => {
         {activeTab === 'system' && (
           <div className="space-y-4">
             {/* Data Storage Info */}
-            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-5">
-              <h3 className="font-semibold text-gray-900 dark:text-white mb-4">Data Storage</h3>
-              <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-4 mb-4">
-                <div className="flex items-center gap-2 text-green-700 dark:text-green-300 font-medium mb-2">
+            <div className="card-modern p-5 lg:p-6">
+              <div className="flex items-center gap-2.5 mb-5">
+                <div className="p-2 bg-emerald-100 dark:bg-emerald-900/40 rounded-lg text-emerald-600 dark:text-emerald-400">
+                  <Database size={18} />
+                </div>
+                <h3 className="font-bold text-lg text-slate-900 dark:text-white">Data Storage</h3>
+              </div>
+              <div className="bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800/50 rounded-xl p-5 mb-5">
+                <div className="flex items-center gap-2 text-emerald-700 dark:text-emerald-300 font-bold mb-2">
                   <Check size={18} />
                   Cloud Backup Enabled
                 </div>
-                <p className="text-sm text-green-600 dark:text-green-400">
+                <p className="text-sm text-emerald-600 dark:text-emerald-400 leading-relaxed">
                   All data is securely stored in Google Sheets and automatically synced. Your inventory, sales, and user data are protected in the cloud.
                 </p>
               </div>
-              <div className="text-sm text-gray-500 dark:text-gray-400 space-y-2">
-                <p><strong>Database:</strong> Google Sheets (ShopOS_DB)</p>
-                <p><strong>Backup:</strong> Google automatically maintains version history. You can view/restore previous versions in Google Sheets.</p>
-                <p><strong>Audit Trail:</strong> All changes are logged with timestamps and user info.</p>
+              <div className="text-sm text-slate-500 dark:text-slate-400 space-y-2.5">
+                <p><strong className="text-slate-700 dark:text-slate-300">Database:</strong> Google Sheets (ShopOS_DB)</p>
+                <p><strong className="text-slate-700 dark:text-slate-300">Backup:</strong> Google maintains version history. Restore from Google Sheets.</p>
+                <p><strong className="text-slate-700 dark:text-slate-300">Audit Trail:</strong> All changes are logged with timestamps and user info.</p>
               </div>
             </div>
 
             {/* Export Data */}
-            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-5">
-              <h3 className="font-semibold text-gray-900 dark:text-white mb-4">Export Data</h3>
-              <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
-                Download your data for offline backup or reporting.
-              </p>
+            <div className="card-modern p-5 lg:p-6">
+              <div className="flex items-center gap-2.5 mb-5">
+                <div className="p-2 bg-brand-100 dark:bg-brand-900/40 rounded-lg text-brand-600 dark:text-brand-400">
+                  <Download size={18} />
+                </div>
+                <h3 className="font-bold text-lg text-slate-900 dark:text-white">Export Data</h3>
+              </div>
+              <p className="text-sm text-slate-500 dark:text-slate-400 mb-5">Download your data for offline backup or reporting.</p>
               <div className="space-y-3">
                 <button
                   onClick={async () => {
@@ -416,12 +399,12 @@ const SettingsPage: React.FC = () => {
                       a.href = url;
                       a.download = `shopos-inventory-${new Date().toISOString().split('T')[0]}.json`;
                       a.click();
-                      setMessage({ type: 'success', text: 'Inventory exported!' });
+                      toast.success('Inventory exported!');
                     } catch (e) {
-                      setMessage({ type: 'error', text: 'Export failed' });
+                      toast.error('Export failed');
                     }
                   }}
-                  className="w-full py-3 bg-brand-100 dark:bg-brand-900/30 text-brand-700 dark:text-brand-300 rounded-lg font-medium hover:bg-brand-200 dark:hover:bg-brand-900/50"
+                  className="w-full btn-secondary flex items-center justify-center gap-2"
                 >
                   Export Inventory (JSON)
                 </button>
@@ -435,12 +418,12 @@ const SettingsPage: React.FC = () => {
                       a.href = url;
                       a.download = `shopos-sales-${new Date().toISOString().split('T')[0]}.json`;
                       a.click();
-                      setMessage({ type: 'success', text: 'Sales exported!' });
+                      toast.success('Sales exported!');
                     } catch (e) {
-                      setMessage({ type: 'error', text: 'Export failed' });
+                      toast.error('Export failed');
                     }
                   }}
-                  className="w-full py-3 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg font-medium hover:bg-gray-200 dark:hover:bg-gray-600"
+                  className="w-full btn-secondary flex items-center justify-center gap-2"
                 >
                   Export Sales History (JSON)
                 </button>
@@ -448,25 +431,45 @@ const SettingsPage: React.FC = () => {
             </div>
 
             {/* Clear Local Cache */}
-            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-5">
-              <h3 className="font-semibold text-gray-900 dark:text-white mb-4">Local Cache</h3>
-              <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+            <div className="card-modern p-5 lg:p-6">
+              <div className="flex items-center gap-2.5 mb-5">
+                <div className="p-2 bg-amber-100 dark:bg-amber-900/40 rounded-lg text-amber-600 dark:text-amber-400">
+                  <HardDrive size={18} />
+                </div>
+                <h3 className="font-bold text-lg text-slate-900 dark:text-white">Local Cache</h3>
+              </div>
+              <p className="text-sm text-slate-500 dark:text-slate-400 mb-5">
                 Clear locally cached data. This will NOT delete your actual data (which is in Google Sheets).
               </p>
               <button
                 onClick={() => {
-                  if (confirm('Clear local cache? You will need to login again. Your actual data is safe in Google Sheets.')) {
-                    localStorage.clear();
-                    window.location.reload();
-                  }
+                  toast((t) => (
+                    <div className="flex items-center gap-3">
+                      <AlertCircle size={18} className="text-amber-500 shrink-0" />
+                      <div>
+                        <p className="font-semibold text-sm">Clear local cache?</p>
+                        <p className="text-xs opacity-70">You'll need to login again.</p>
+                      </div>
+                      <div className="flex gap-2 ml-2">
+                        <button onClick={() => toast.dismiss(t.id)} className="px-3 py-1.5 text-xs font-medium bg-slate-600 rounded-lg text-white">Cancel</button>
+                        <button onClick={() => { toast.dismiss(t.id); localStorage.clear(); window.location.reload(); }} className="px-3 py-1.5 text-xs font-bold bg-amber-500 text-white rounded-lg">Clear</button>
+                      </div>
+                    </div>
+                  ), { duration: 8000 });
                 }}
-                className="w-full py-3 bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300 rounded-lg font-medium"
+                className="w-full py-3 bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 rounded-xl font-bold hover:bg-amber-200 dark:hover:bg-amber-900/50 transition-colors"
               >
                 Clear Local Cache & Logout
               </button>
             </div>
           </div>
         )}
+
+        <Toaster position="top-right" toastOptions={{
+          style: { borderRadius: '12px', background: '#1e293b', color: '#f1f5f9', fontSize: '14px', fontWeight: 600 },
+          success: { iconTheme: { primary: '#10b981', secondary: '#fff' } },
+          error: { iconTheme: { primary: '#f43f5e', secondary: '#fff' } }
+        }} />
       </div>
     </Layout>
   );

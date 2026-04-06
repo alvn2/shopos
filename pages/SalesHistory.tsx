@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import Layout from '../components/common/Layout';
 import { api } from '../services/api';
-import { History, Search, Calendar, Filter, Eye, ChevronDown, ChevronUp, Download, RefreshCw } from 'lucide-react';
+import { History, Search, Calendar, Download, RefreshCw, ChevronDown, ChevronUp, X } from 'lucide-react';
 
 interface SaleRecord {
     date: string;
@@ -46,58 +46,37 @@ const SalesHistory: React.FC = () => {
         }
     };
 
-    // Filter sales
     const filteredSales = useMemo(() => {
         return sales.filter(sale => {
-            // Search filter
             if (searchTerm) {
                 const s = searchTerm.toLowerCase();
                 const matchesReceipt = sale.batch_id.toLowerCase().includes(s);
                 const matchesCustomer = (sale.customer_name || '').toLowerCase().includes(s);
                 const matchesItems = sale.items.some(i =>
-                    i.name.toLowerCase().includes(s) ||
-                    i.part_number.toLowerCase().includes(s)
+                    i.name.toLowerCase().includes(s) || i.part_number.toLowerCase().includes(s)
                 );
                 if (!matchesReceipt && !matchesCustomer && !matchesItems) return false;
             }
-
-            // Date filter
             if (dateFrom && new Date(sale.date) < new Date(dateFrom)) return false;
             if (dateTo && new Date(sale.date) > new Date(dateTo + 'T23:59:59')) return false;
-
-            // Payment filter
             if (paymentFilter !== 'All' && sale.payment_method !== paymentFilter) return false;
-
             return true;
         }).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
     }, [sales, searchTerm, dateFrom, dateTo, paymentFilter]);
 
-    // Totals
     const totalRevenue = filteredSales.reduce((sum, s) => sum + s.total_kes, 0);
     const totalTransactions = filteredSales.length;
 
-    const formatDate = (iso: string) => {
-        const date = new Date(iso);
-        return date.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
-    };
-
-    const formatTime = (iso: string) => {
-        const date = new Date(iso);
-        return date.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
-    };
+    const formatDate = (iso: string) => new Date(iso).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+    const formatTime = (iso: string) => new Date(iso).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
 
     const exportCSV = () => {
         const headers = ['Date', 'Receipt #', 'Items', 'Total (KES)', 'Payment', 'Customer', 'Sold By'];
         const rows = filteredSales.map(s => [
-            formatDate(s.date),
-            s.batch_id,
+            formatDate(s.date), s.batch_id,
             s.items.map(i => `${i.qty}x ${i.name}`).join('; '),
-            s.total_kes.toString(),
-            s.payment_method,
-            s.customer_name || '',
-            s.sold_by
+            s.total_kes.toString(), s.payment_method, s.customer_name || '', s.sold_by
         ]);
-
         const csv = [headers, ...rows].map(row => row.map(cell => `"${cell}"`).join(',')).join('\n');
         const blob = new Blob([csv], { type: 'text/csv' });
         const url = window.URL.createObjectURL(blob);
@@ -108,31 +87,29 @@ const SalesHistory: React.FC = () => {
         window.URL.revokeObjectURL(url);
     };
 
+    const paymentBadgeClass = (method: string) => {
+        switch (method) {
+            case 'Cash': return 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800/50';
+            case 'M-Pesa': return 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300 border-blue-200 dark:border-blue-800/50';
+            default: return 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300 border-amber-200 dark:border-amber-800/50';
+        }
+    };
+
     return (
         <Layout title="Sales History">
-            <div className="p-4 lg:p-6 max-w-4xl mx-auto">
+            <div className="p-4 lg:p-8 max-w-4xl mx-auto space-y-6 animate-enter">
                 {/* Header */}
-                <div className="mb-6 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+                <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-4">
                     <div>
-                        <h1 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
-                            <History size={24} />
-                            Sales History
-                        </h1>
-                        <p className="text-gray-500 dark:text-gray-400 mt-1">View all recorded sales</p>
+                        <h1 className="text-3xl font-extrabold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-slate-900 to-slate-600 dark:from-white dark:to-slate-400">Sales History</h1>
+                        <p className="text-slate-500 dark:text-slate-400 mt-2 font-medium">View all recorded sales transactions</p>
                     </div>
-
                     <div className="flex gap-2">
-                        <button
-                            onClick={fetchSales}
-                            className="flex items-center gap-2 px-4 py-2 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600"
-                        >
+                        <button onClick={fetchSales} className="btn-secondary flex items-center gap-2 !py-2.5">
                             <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
                             Refresh
                         </button>
-                        <button
-                            onClick={exportCSV}
-                            className="flex items-center gap-2 px-4 py-2 bg-brand-600 text-white rounded-lg hover:bg-brand-700"
-                        >
+                        <button onClick={exportCSV} className="btn-primary !py-2.5 flex items-center gap-2">
                             <Download size={16} />
                             Export CSV
                         </button>
@@ -140,45 +117,35 @@ const SalesHistory: React.FC = () => {
                 </div>
 
                 {/* Filters */}
-                <div className="bg-white dark:bg-gray-800 rounded-xl p-4 shadow-sm border border-gray-200 dark:border-gray-700 mb-6 space-y-4">
-                    {/* Search */}
-                    <div className="relative">
-                        <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                <div className="card-modern p-5 space-y-4">
+                    <div className="relative group">
+                        <Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-brand-500 transition-colors" />
                         <input
                             type="text"
                             placeholder="Search by receipt #, customer, or item..."
                             value={searchTerm}
                             onChange={e => setSearchTerm(e.target.value)}
-                            className="w-full pl-10 pr-4 py-2.5 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg text-sm dark:text-white focus:ring-2 focus:ring-brand-500 outline-none"
+                            className="input-modern !pl-12"
                         />
+                        {searchTerm && (
+                            <button onClick={() => setSearchTerm('')} className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-1 rounded-full hover:bg-slate-200 dark:hover:bg-slate-700">
+                                <X size={14} />
+                            </button>
+                        )}
                     </div>
 
                     <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-                        <div>
-                            <label className="block text-xs font-medium text-gray-500 mb-1">From</label>
-                            <input
-                                type="date"
-                                value={dateFrom}
-                                onChange={e => setDateFrom(e.target.value)}
-                                className="w-full p-2 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg text-sm dark:text-white"
-                            />
+                        <div className="space-y-1.5">
+                            <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider pl-1">From</label>
+                            <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} className="input-modern !py-2.5" />
                         </div>
-                        <div>
-                            <label className="block text-xs font-medium text-gray-500 mb-1">To</label>
-                            <input
-                                type="date"
-                                value={dateTo}
-                                onChange={e => setDateTo(e.target.value)}
-                                className="w-full p-2 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg text-sm dark:text-white"
-                            />
+                        <div className="space-y-1.5">
+                            <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider pl-1">To</label>
+                            <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} className="input-modern !py-2.5" />
                         </div>
-                        <div>
-                            <label className="block text-xs font-medium text-gray-500 mb-1">Payment</label>
-                            <select
-                                value={paymentFilter}
-                                onChange={e => setPaymentFilter(e.target.value)}
-                                className="w-full p-2 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg text-sm dark:text-white"
-                            >
+                        <div className="space-y-1.5">
+                            <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider pl-1">Payment</label>
+                            <select value={paymentFilter} onChange={e => setPaymentFilter(e.target.value)} className="input-modern !py-2.5">
                                 <option value="All">All Methods</option>
                                 <option value="Cash">Cash</option>
                                 <option value="M-Pesa">M-Pesa</option>
@@ -188,7 +155,7 @@ const SalesHistory: React.FC = () => {
                         <div className="flex items-end">
                             <button
                                 onClick={() => { setSearchTerm(''); setDateFrom(''); setDateTo(''); setPaymentFilter('All'); }}
-                                className="w-full p-2 text-sm text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200"
+                                className="w-full py-2.5 text-sm font-semibold text-slate-500 hover:text-slate-700 dark:hover:text-slate-200 bg-slate-50 dark:bg-slate-800 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
                             >
                                 Clear Filters
                             </button>
@@ -197,99 +164,83 @@ const SalesHistory: React.FC = () => {
                 </div>
 
                 {/* Summary */}
-                <div className="grid grid-cols-2 gap-4 mb-6">
-                    <div className="bg-white dark:bg-gray-800 rounded-xl p-4 shadow-sm border border-gray-200 dark:border-gray-700">
-                        <div className="text-sm text-gray-500 dark:text-gray-400">Total Revenue</div>
-                        <div className="text-2xl font-bold text-brand-600 dark:text-brand-400">
-                            KES {totalRevenue.toLocaleString()}
-                        </div>
+                <div className="grid grid-cols-2 gap-4">
+                    <div className="card-modern p-5">
+                        <div className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-1">Total Revenue</div>
+                        <div className="text-2xl font-extrabold text-brand-600 dark:text-brand-400">KES {totalRevenue.toLocaleString()}</div>
                     </div>
-                    <div className="bg-white dark:bg-gray-800 rounded-xl p-4 shadow-sm border border-gray-200 dark:border-gray-700">
-                        <div className="text-sm text-gray-500 dark:text-gray-400">Transactions</div>
-                        <div className="text-2xl font-bold text-gray-900 dark:text-white">
-                            {totalTransactions}
-                        </div>
+                    <div className="card-modern p-5">
+                        <div className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-1">Transactions</div>
+                        <div className="text-2xl font-extrabold text-slate-900 dark:text-white">{totalTransactions}</div>
                     </div>
                 </div>
 
                 {/* Sales List */}
                 <div className="space-y-3">
                     {loading ? (
-                        <div className="flex flex-col items-center justify-center py-20 text-gray-500">
+                        <div className="flex flex-col items-center justify-center py-20 text-slate-500">
                             <RefreshCw className="animate-spin mb-3" size={32} />
-                            <p>Loading sales...</p>
+                            <p className="font-medium">Loading sales...</p>
                         </div>
                     ) : filteredSales.length === 0 ? (
-                        <div className="text-center py-20 text-gray-500 dark:text-gray-400">
-                            <History size={48} className="mx-auto mb-4 opacity-50" />
-                            <p className="text-lg font-medium">No sales found</p>
-                            <p className="text-sm">Try adjusting your filters or record a new sale</p>
+                        <div className="text-center py-20 card-modern p-8">
+                            <History size={48} className="mx-auto text-slate-300 dark:text-slate-600 mb-4" />
+                            <p className="text-lg font-bold text-slate-900 dark:text-slate-100">No sales found</p>
+                            <p className="text-sm text-slate-500 mt-1">Try adjusting your filters or record a new sale</p>
                         </div>
                     ) : (
                         filteredSales.map(sale => (
-                            <div
-                                key={sale.batch_id}
-                                className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden"
-                            >
-                                {/* Sale Header */}
+                            <div key={sale.batch_id} className="card-modern overflow-hidden hover:border-brand-300 dark:hover:border-brand-500/50 transition-colors">
                                 <button
                                     onClick={() => setExpandedId(expandedId === sale.batch_id ? null : sale.batch_id)}
-                                    className="w-full p-4 text-left"
+                                    className="w-full p-5 text-left"
                                 >
                                     <div className="flex justify-between items-start">
                                         <div>
-                                            <div className="flex items-center gap-2">
-                                                <span className="font-bold text-gray-900 dark:text-white">#{sale.batch_id}</span>
-                                                <span className={`text-xs font-medium px-2 py-0.5 rounded ${sale.payment_method === 'Cash' ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300' :
-                                                        sale.payment_method === 'M-Pesa' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300' :
-                                                            'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-300'
-                                                    }`}>
+                                            <div className="flex items-center gap-2.5 flex-wrap">
+                                                <span className="font-bold text-slate-900 dark:text-white text-lg">#{sale.batch_id}</span>
+                                                <span className={`text-xs font-bold px-2.5 py-1 rounded-md border ${paymentBadgeClass(sale.payment_method)}`}>
                                                     {sale.payment_method}
                                                 </span>
                                             </div>
-                                            <div className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                                            <div className="text-sm text-slate-500 dark:text-slate-400 mt-1.5 font-medium">
                                                 {formatDate(sale.date)} at {formatTime(sale.date)}
-                                                {sale.customer_name && <span> • {sale.customer_name}</span>}
+                                                {sale.customer_name && <span> • <span className="text-slate-700 dark:text-slate-300">{sale.customer_name}</span></span>}
                                             </div>
                                         </div>
                                         <div className="flex items-center gap-3">
                                             <div className="text-right">
-                                                <div className="font-bold text-lg text-gray-900 dark:text-white">
-                                                    KES {sale.total_kes.toLocaleString()}
-                                                </div>
-                                                <div className="text-xs text-gray-500">
-                                                    {sale.items.reduce((sum, i) => sum + i.qty, 0)} items
-                                                </div>
+                                                <div className="font-extrabold text-lg text-slate-900 dark:text-white">KES {sale.total_kes.toLocaleString()}</div>
+                                                <div className="text-xs text-slate-400 font-medium">{sale.items.reduce((sum, i) => sum + i.qty, 0)} items</div>
                                             </div>
-                                            {expandedId === sale.batch_id ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
+                                            <div className="text-slate-400">
+                                                {expandedId === sale.batch_id ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
+                                            </div>
                                         </div>
                                     </div>
                                 </button>
 
-                                {/* Expanded Details */}
                                 {expandedId === sale.batch_id && (
-                                    <div className="border-t dark:border-gray-700 p-4 bg-gray-50 dark:bg-gray-700/50">
-                                        <div className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Items Sold:</div>
+                                    <div className="border-t border-slate-200 dark:border-slate-700 p-5 bg-slate-50/50 dark:bg-slate-900/50 animate-slide-up space-y-3">
+                                        <div className="text-xs font-bold uppercase tracking-wider text-slate-500">Items Sold</div>
                                         <div className="space-y-2">
                                             {sale.items.map((item, idx) => (
                                                 <div key={idx} className="flex justify-between text-sm">
-                                                    <span className="text-gray-600 dark:text-gray-400">
-                                                        {item.qty}x {item.name} <span className="text-gray-400 font-mono">({item.part_number})</span>
+                                                    <span className="text-slate-600 dark:text-slate-300 font-medium">
+                                                        {item.qty}× {item.name} <span className="text-slate-400 font-mono text-xs">({item.part_number})</span>
                                                     </span>
-                                                    <span className="font-medium text-gray-900 dark:text-white">
-                                                        KES {(item.unit_price * item.qty).toLocaleString()}
-                                                    </span>
+                                                    <span className="font-bold text-slate-900 dark:text-white">KES {(item.unit_price * item.qty).toLocaleString()}</span>
                                                 </div>
                                             ))}
                                         </div>
                                         {sale.notes && (
-                                            <div className="mt-3 pt-3 border-t dark:border-gray-600">
-                                                <div className="text-xs text-gray-500 mb-1">Notes:</div>
-                                                <div className="text-sm text-gray-700 dark:text-gray-300">{sale.notes}</div>
+                                            <div className="pt-3 border-t border-slate-200 dark:border-slate-700">
+                                                <div className="text-xs font-bold text-slate-500 mb-1 uppercase tracking-wider">Notes</div>
+                                                <div className="text-sm text-slate-700 dark:text-slate-300">{sale.notes}</div>
                                             </div>
                                         )}
-                                        <div className="mt-3 pt-3 border-t dark:border-gray-600 text-xs text-gray-500">
-                                            Recorded by: {sale.sold_by}
+                                        <div className="pt-3 border-t border-slate-200 dark:border-slate-700 text-xs text-slate-400 font-medium">
+                                            Recorded by: <span className="text-slate-600 dark:text-slate-300">{sale.sold_by}</span>
                                         </div>
                                     </div>
                                 )}
