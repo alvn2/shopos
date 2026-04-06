@@ -465,11 +465,7 @@ const SettingsPage: React.FC = () => {
           </div>
         )}
 
-        <Toaster position="top-right" toastOptions={{
-          style: { borderRadius: '12px', background: '#1e293b', color: '#f1f5f9', fontSize: '14px', fontWeight: 600 },
-          success: { iconTheme: { primary: '#10b981', secondary: '#fff' } },
-          error: { iconTheme: { primary: '#f43f5e', secondary: '#fff' } }
-        }} />
+
       </div>
     </Layout>
   );

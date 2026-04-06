@@ -3,6 +3,7 @@ import { HashRouter as Router, Routes, Route, Navigate } from 'react-router-dom'
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { InventoryProvider } from './contexts/InventoryContext';
 import { OfflineProvider } from './contexts/OfflineContext';
+import { Toaster } from 'react-hot-toast';
 
 // Lazy-loaded pages for code splitting
 const Login = lazy(() => import('./pages/Login'));
@@ -149,6 +150,11 @@ const App: React.FC = () => {
           <Router>
             <AppRoutes />
           </Router>
+          <Toaster position="top-right" toastOptions={{
+            style: { borderRadius: '12px', background: '#1e293b', color: '#f1f5f9', fontSize: '14px', fontWeight: 600 },
+            success: { iconTheme: { primary: '#10b981', secondary: '#fff' } },
+            error: { iconTheme: { primary: '#f43f5e', secondary: '#fff' } }
+          }} />
         </OfflineProvider>
       </InventoryProvider>
     </AuthProvider>
