@@ -1,10 +1,12 @@
 import React, { useState, useMemo, useEffect, useCallback, memo, useTransition } from 'react';
 import Layout from '../components/common/Layout';
 import BulkImport from '../components/inventory/BulkImport';
+import BarcodeLabel from '../components/inventory/BarcodeLabel';
+import BarcodeScanner from '../components/common/BarcodeScanner';
 import { useAuth } from '../contexts/AuthContext';
 import { useInventory } from '../contexts/InventoryContext';
 import { InventoryItem, PartMake, UserRole } from '../types';
-import { Minus, Plus, Save, RotateCcw, Package, Search, Trash2, Edit2, X, Calculator, Upload, ChevronLeft, ChevronRight, AlertTriangle } from 'lucide-react';
+import { Minus, Plus, Save, RotateCcw, Package, Search, Trash2, Edit2, X, Calculator, Upload, ChevronLeft, ChevronRight, AlertTriangle, QrCode } from 'lucide-react';
 import { api } from '../services/api';
 import { Toaster, toast } from 'react-hot-toast';
 
@@ -15,13 +17,15 @@ const InventoryRow = memo<{
   item: InventoryItem;
   original: InventoryItem | undefined;
   isModified: boolean;
+  isAdmin: boolean;
   isWorker: boolean;
   landedCostKES: number;
   profitMargin: number;
   onAdjust: (uuid: string, delta: number) => void;
   onEdit: (item: InventoryItem) => void;
   onDelete: (uuid: string) => void;
-}>(({ item, original, isModified, isWorker, landedCostKES, profitMargin, onAdjust, onEdit, onDelete }) => (
+  onPrintBarcode: (item: InventoryItem) => void;
+}>(({ item, original, isModified, isAdmin, isWorker, landedCostKES, profitMargin, onAdjust, onEdit, onDelete, onPrintBarcode }) => (
   <div className={`relative overflow-hidden group card-modern p-5 lg:p-6 transition-all duration-200 ${isModified ? 'border-amber-400 dark:border-amber-500/50 ring-2 ring-amber-500/10' : 'hover:border-brand-300 dark:hover:border-brand-500/50'}`}>
 
     {/* Item Header */}
@@ -49,30 +53,39 @@ const InventoryRow = memo<{
       </div>
 
       {/* Action buttons - always visible on mobile */}
-      {!isWorker && (
         <div className="flex gap-2 shrink-0">
           <button
-            onClick={() => onEdit(item)}
-            className="p-2.5 bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-brand-100 hover:text-brand-600 dark:hover:bg-brand-900/50 dark:hover:text-brand-400 rounded-lg transition-colors"
-            title="Edit item"
+            onClick={() => onPrintBarcode(item)}
+            className="p-2.5 bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-violet-100 hover:text-violet-600 dark:hover:bg-violet-900/50 dark:hover:text-violet-400 rounded-lg transition-colors"
+            title="Print Barcode"
           >
-            <Edit2 size={16} />
+            <QrCode size={16} />
           </button>
-          <button
-            onClick={() => onDelete(item.uuid)}
-            className="p-2.5 bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-rose-100 hover:text-rose-600 dark:hover:bg-rose-900/50 dark:hover:text-rose-400 rounded-lg transition-colors"
-            title="Delete item"
-          >
-            <Trash2 size={16} />
-          </button>
+          {!isWorker && (
+            <>
+              <button
+                onClick={() => onEdit(item)}
+                className="p-2.5 bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-brand-100 hover:text-brand-600 dark:hover:bg-brand-900/50 dark:hover:text-brand-400 rounded-lg transition-colors"
+                title="Edit item"
+              >
+                <Edit2 size={16} />
+              </button>
+              <button
+                onClick={() => onDelete(item.uuid)}
+                className="p-2.5 bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-rose-100 hover:text-rose-600 dark:hover:bg-rose-900/50 dark:hover:text-rose-400 rounded-lg transition-colors"
+                title="Delete item"
+              >
+                <Trash2 size={16} />
+              </button>
+            </>
+          )}
         </div>
-      )}
     </div>
 
     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
       {/* Pricing Block */}
       <div className="bg-slate-50/80 dark:bg-slate-900/50 rounded-xl p-4 border border-slate-100 dark:border-slate-800/50">
-        {!isWorker && (
+        {isAdmin && (
           <div className="flex items-center justify-between text-sm mb-3 pb-3 border-b border-slate-200 dark:border-slate-700/50">
             <span className="text-slate-500 dark:text-slate-400">
               <span className="font-semibold">Buy:</span> AED {item.aed_buying_price}
@@ -86,13 +99,13 @@ const InventoryRow = memo<{
             <span className="text-slate-500 dark:text-slate-400 font-semibold uppercase text-xs tracking-widest block mb-1">Sell Price</span>
             <span className="text-brand-600 dark:text-brand-400 font-extrabold text-2xl tracking-tight">KES {item.selling_price.toLocaleString()}</span>
           </div>
-          {!isWorker && (
+          {isAdmin && (
             <div className={`px-3 py-1.5 rounded-lg text-xs font-black tracking-wide ${profitMargin > 30 ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300' : profitMargin > 10 ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300' : 'bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-300'}`}>
               {profitMargin > 0 ? '+' : ''}{profitMargin}% MARGIN
             </div>
           )}
         </div>
-        {!isWorker && (
+        {isAdmin && (
           <div className="mt-2 text-xs font-semibold text-slate-500 dark:text-slate-400">
             Profit: KES {(item.selling_price - landedCostKES).toLocaleString()} / unit
           </div>
@@ -138,6 +151,7 @@ InventoryRow.displayName = 'InventoryRow';
 
 const Inventory: React.FC = () => {
   const { user } = useAuth();
+  const isAdmin = user?.role === UserRole.ADMIN;
   const isWorker = user?.role === UserRole.WORKER;
   const { items, loading, settings, refreshInventory, removeLocalItem } = useInventory();
 
@@ -162,6 +176,20 @@ const Inventory: React.FC = () => {
     aed_buying_price: '', ksh_buying_price: '', selling_price: '', min_stock: ''
   });
   const [editSaving, setEditSaving] = useState(false);
+
+  // Barcode label state
+  const [barcodeItem, setBarcodeItem] = useState<InventoryItem | null>(null);
+
+  // Barcode scan handler — filter to scanned item
+  const handleBarcodeScan = useCallback((code: string) => {
+    const item = items.find(i => i.part_number.toUpperCase() === code.toUpperCase());
+    if (item) {
+      setSearchTerm(item.part_number);
+      toast.success(`Found: ${item.name}`);
+    } else {
+      toast.error(`No item found for barcode: ${code}`);
+    }
+  }, [items]);
 
   // Debounce search to prevent jank on every keystroke
   useEffect(() => {
@@ -327,7 +355,7 @@ const Inventory: React.FC = () => {
     <Layout title="Inventory">
       <div className="p-4 lg:p-8 max-w-6xl mx-auto space-y-6 animate-enter">
         {/* Rate Info Banner */}
-        {!isWorker && (
+        {isAdmin && (
           <div className="p-4 bg-gradient-to-r from-indigo-50/50 to-cyan-50/50 dark:from-indigo-900/20 dark:to-cyan-900/20 glass-panel rounded-2xl flex items-center gap-4 text-sm text-slate-700 dark:text-slate-300 shadow-sm">
             <div className="w-10 h-10 rounded-full bg-indigo-100 dark:bg-indigo-900/50 flex items-center justify-center shrink-0">
               <Calculator size={20} className="text-indigo-600 dark:text-indigo-400" />
@@ -347,13 +375,16 @@ const Inventory: React.FC = () => {
             </p>
           </div>
           {!isWorker && (
-            <button
-              onClick={() => setShowBulkImport(true)}
-              className="btn-secondary flex items-center gap-2"
-            >
-              <Upload size={18} />
-              Import Data
-            </button>
+            <div className="flex gap-2">
+              <BarcodeScanner onScan={handleBarcodeScan} label="Scan" />
+              <button
+                onClick={() => setShowBulkImport(true)}
+                className="btn-secondary flex items-center gap-2"
+              >
+                <Upload size={18} />
+                Import Data
+              </button>
+            </div>
           )}
         </div>
 
@@ -418,12 +449,14 @@ const Inventory: React.FC = () => {
                   item={item}
                   original={original}
                   isModified={isModified}
+                  isAdmin={isAdmin}
                   isWorker={isWorker}
                   landedCostKES={landedCostKES}
                   profitMargin={profitMargin}
                   onAdjust={handleAdjust}
                   onEdit={openEditModal}
                   onDelete={handleDelete}
+                  onPrintBarcode={setBarcodeItem}
                 />
               );
             })
@@ -573,6 +606,16 @@ const Inventory: React.FC = () => {
         <BulkImport
           onComplete={() => { setShowBulkImport(false); refreshInventory(); }}
           onClose={() => setShowBulkImport(false)}
+        />
+      )}
+
+      {/* Barcode Label Modal */}
+      {barcodeItem && (
+        <BarcodeLabel
+          partNumber={barcodeItem.part_number}
+          name={barcodeItem.name}
+          sellingPrice={barcodeItem.selling_price}
+          onClose={() => setBarcodeItem(null)}
         />
       )}
     </Layout>

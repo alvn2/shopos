@@ -3,6 +3,7 @@ import { Upload, FileSpreadsheet, AlertCircle, CheckCircle, X, Download, Refresh
 import * as XLSX from 'xlsx';
 import { api } from '../../services/api';
 import { PartMake } from '../../types';
+import { useInventory } from '../../contexts/InventoryContext';
 
 interface ImportItem {
     part_number: string;
@@ -43,6 +44,10 @@ const BulkImport: React.FC<BulkImportProps> = ({ onComplete, onClose }) => {
     const [updateExisting, setUpdateExisting] = useState(true);
     const [result, setResult] = useState<ImportResult | null>(null);
     const [importing, setImporting] = useState(false);
+    
+    const { settings } = useInventory();
+    const aedRate = settings?.aed_rate || 36.5;
+    const conversionPercent = settings?.conversion_percent || 13;
 
     const parseCSV = useCallback((content: string) => {
         const lines = content.trim().split('\n');
@@ -100,14 +105,31 @@ const BulkImport: React.FC<BulkImportProps> = ({ onComplete, onClose }) => {
                 .filter(Boolean)
                 .join(', ');
 
+            const parsedAed = parseFloat(row.aed_buying_price) || 0;
+            const parsedKsh = parseFloat(row.ksh_buying_price) || 0;
+            let parsedSelling = parseFloat(row.selling_price) || 0;
+            
+            if (parsedSelling === 0) {
+                let cost = 0;
+                if (parsedKsh > 0) {
+                    cost = parsedKsh;
+                } else if (parsedAed > 0) {
+                    cost = parsedAed * aedRate * (1 + conversionPercent / 100);
+                }
+                if (cost > 0) {
+                    // Apply 1.5x multiplier and round to nearest whole number
+                    parsedSelling = Math.round(cost * 1.5);
+                }
+            }
+
             parsedItems.push({
                 part_number: row.part_number,
                 name: row.name,
                 tags: extraTags,
                 make,
-                aed_buying_price: parseFloat(row.aed_buying_price) || 0,
-                ksh_buying_price: parseFloat(row.ksh_buying_price) || 0,
-                selling_price: parseFloat(row.selling_price) || 0,
+                aed_buying_price: parsedAed,
+                ksh_buying_price: parsedKsh,
+                selling_price: parsedSelling,
                 stock_qty: parseInt(row.stock_qty) || 0,
                 min_stock: parseInt(row.min_stock) || 5
             });
@@ -138,7 +160,7 @@ const BulkImport: React.FC<BulkImportProps> = ({ onComplete, onClose }) => {
         setItems(deduplicatedItems);
         setErrors(parseErrors);
         setStep('preview');
-    }, []);
+    }, [aedRate, conversionPercent]);
 
     const processFile = (file: File) => {
         const fileExt = file.name.split('.').pop()?.toLowerCase();

@@ -1,8 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import Layout from '../components/common/Layout';
 import { useAuth } from '../contexts/AuthContext';
 import { api } from '../services/api';
-import { FileText, User, Search, Download, ChevronDown, ChevronUp, RefreshCw, Shield } from 'lucide-react';
+import { FileText, User, Search, Download, ChevronDown, ChevronUp, RefreshCw, Shield, ArrowRight } from 'lucide-react';
 
 interface AuditLogEntry {
     timestamp: string;
@@ -21,20 +21,80 @@ const actionColors: Record<string, string> = {
     LOGOUT: 'bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-300 border-rose-200 dark:border-rose-800/50',
     LOGOUT_ALL_DEVICES: 'bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-300 border-rose-200 dark:border-rose-800/50',
     STOCK_UPDATE: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300 border-blue-200 dark:border-blue-800/50',
+    STOCK_OVERRIDE: 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300 border-orange-200 dark:border-orange-800/50',
+    PRICE_CHANGE: 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300 border-purple-200 dark:border-purple-800/50',
     SALE_RECORDED: 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300 border-purple-200 dark:border-purple-800/50',
     SALE_STOCK_DEDUCTION: 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300 border-orange-200 dark:border-orange-800/50',
     INVENTORY_UPDATE: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300 border-blue-200 dark:border-blue-800/50',
     INVENTORY_CREATE: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800/50',
     INVENTORY_DELETE: 'bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-300 border-rose-200 dark:border-rose-800/50',
+    INVENTORY_SOFT_DELETE: 'bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-300 border-rose-200 dark:border-rose-800/50',
+    INVENTORY_BULK_IMPORT: 'bg-cyan-100 text-cyan-700 dark:bg-cyan-900/30 dark:text-cyan-300 border-cyan-200 dark:border-cyan-800/50',
     SETTINGS_UPDATED: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300 border-amber-200 dark:border-amber-800/50',
     LOGIN_FAILED: 'bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-300 border-rose-200 dark:border-rose-800/50',
+    CUSTOMER_CREATE: 'bg-teal-100 text-teal-700 dark:bg-teal-900/30 dark:text-teal-300 border-teal-200 dark:border-teal-800/50',
+    CUSTOMER_PAYMENT: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300 border-green-200 dark:border-green-800/50',
 };
+
+/** Parse JSON change values into human-readable summaries */
+function parseChangeSummary(action: string, oldVal: string, newVal: string): string[] {
+    const changes: string[] = [];
+    try {
+        const oldObj = oldVal ? JSON.parse(oldVal) : {};
+        const newObj = newVal ? JSON.parse(newVal) : {};
+
+        // Price changes
+        const priceFields = [
+            { key: 'Selling_Price', label: 'Selling Price' },
+            { key: 'selling_price', label: 'Selling Price' },
+            { key: 'AED_Buying_Price', label: 'AED Buy Price' },
+            { key: 'aed_buying_price', label: 'AED Buy Price' },
+            { key: 'KSH_Buying_Price', label: 'KSH Buy Price' },
+            { key: 'ksh_buying_price', label: 'KSH Buy Price' },
+        ];
+
+        for (const f of priceFields) {
+            if (newObj[f.key] !== undefined && oldObj[f.key] !== undefined && String(newObj[f.key]) !== String(oldObj[f.key])) {
+                changes.push(`${f.label}: ${oldObj[f.key]} → ${newObj[f.key]}`);
+            } else if (newObj[f.key] !== undefined && oldObj[f.key] === undefined) {
+                changes.push(`${f.label} set to ${newObj[f.key]}`);
+            }
+        }
+
+        // Stock changes
+        const stockKeys = ['Stock_Qty', 'stock_qty'];
+        for (const k of stockKeys) {
+            if (newObj[k] !== undefined && oldObj[k] !== undefined && String(newObj[k]) !== String(oldObj[k])) {
+                changes.push(`Stock: ${oldObj[k]} → ${newObj[k]}`);
+            }
+        }
+
+        // Bulk import stats
+        if (action === 'INVENTORY_BULK_IMPORT' && newObj.total_items) {
+            changes.push(`${newObj.total_items} items processed`);
+            if (newObj.created) changes.push(`${newObj.created} created`);
+            if (newObj.updated) changes.push(`${newObj.updated} updated`);
+        }
+
+        // Sale total
+        if (newObj.total_kes || newObj.Total_KES) {
+            const total = newObj.total_kes || newObj.Total_KES;
+            changes.push(`Total: KES ${Number(total).toLocaleString()}`);
+        }
+    } catch {
+        // If JSON parsing fails, just return empty
+    }
+    return changes;
+}
 
 const AuditLog: React.FC = () => {
     const { user } = useAuth();
     const [logs, setLogs] = useState<AuditLogEntry[]>([]);
     const [loading, setLoading] = useState(true);
     const [expandedRow, setExpandedRow] = useState<number | null>(null);
+    const [totalLogs, setTotalLogs] = useState(0);
+    const [currentPage, setCurrentPage] = useState(1);
+    const logsPerPage = 50;
 
     // Filters
     const [filterUser, setFilterUser] = useState('All');
@@ -42,6 +102,10 @@ const AuditLog: React.FC = () => {
     const [filterFrom, setFilterFrom] = useState('');
     const [filterTo, setFilterTo] = useState('');
     const [searchTerm, setSearchTerm] = useState('');
+
+    // Available filter options (fetched from API)
+    const [availableUsers, setAvailableUsers] = useState<string[]>(['All']);
+    const [availableActions, setAvailableActions] = useState<string[]>(['All']);
 
     // Check if admin
     if (user?.role !== 'admin') {
@@ -58,53 +122,48 @@ const AuditLog: React.FC = () => {
         );
     }
 
-    useEffect(() => {
-        fetchLogs();
-    }, []);
-
-    const fetchLogs = async () => {
+    const fetchLogs = useCallback(async () => {
         setLoading(true);
         try {
-            const mockLogs: AuditLogEntry[] = [
-                {
-                    timestamp: new Date().toISOString(), user: 'admin', action: 'LOGIN',
-                    entity_type: 'AUTH', entity_id: 'sess_abc123', old_value: '',
-                    new_value: '{"device_info":"Chrome on Windows"}', ip_address: '192.168.1.1', device_info: 'Chrome/120.0'
-                },
-                {
-                    timestamp: new Date(Date.now() - 3600000).toISOString(), user: 'admin', action: 'STOCK_UPDATE',
-                    entity_type: 'INVENTORY', entity_id: '550e8400-e29b-41d4-a716-446655440000',
-                    old_value: '{"stock_qty":15}', new_value: '{"stock_qty":12}',
-                    ip_address: '192.168.1.1', device_info: 'Chrome/120.0'
-                },
-                {
-                    timestamp: new Date(Date.now() - 7200000).toISOString(), user: 'counter', action: 'SALE_RECORDED',
-                    entity_type: 'SALES', entity_id: 'RCPT-0042', old_value: '',
-                    new_value: '{"total_kes":4500}', ip_address: '192.168.1.5', device_info: 'Safari/iOS'
-                }
-            ];
-            setLogs(mockLogs);
+            const result = await api.audit.getLogs({
+                user: filterUser,
+                action: filterAction,
+                from: filterFrom,
+                to: filterTo,
+                search: searchTerm,
+                page: currentPage,
+                limit: logsPerPage
+            });
+            setLogs(result.logs || []);
+            setTotalLogs(result.total || 0);
         } catch (error) {
             console.error('Failed to fetch audit logs:', error);
+            setLogs([]);
         } finally {
             setLoading(false);
         }
-    };
+    }, [filterUser, filterAction, filterFrom, filterTo, searchTerm, currentPage]);
 
-    const filteredLogs = logs.filter(log => {
-        if (filterUser !== 'All' && log.user !== filterUser) return false;
-        if (filterAction !== 'All' && log.action !== filterAction) return false;
-        if (filterFrom && new Date(log.timestamp) < new Date(filterFrom)) return false;
-        if (filterTo && new Date(log.timestamp) > new Date(filterTo)) return false;
-        if (searchTerm) {
-            const search = searchTerm.toLowerCase();
-            if (!log.entity_id.toLowerCase().includes(search) && !log.user.toLowerCase().includes(search) && !log.action.toLowerCase().includes(search)) return false;
-        }
-        return true;
-    });
+    // Fetch filter options on mount
+    useEffect(() => {
+        const loadFilters = async () => {
+            try {
+                const [users, actions] = await Promise.all([
+                    api.audit.getUsers(),
+                    api.audit.getActions()
+                ]);
+                setAvailableUsers(['All', ...users]);
+                setAvailableActions(['All', ...actions]);
+            } catch (e) {
+                console.error('Failed to load filter options:', e);
+            }
+        };
+        loadFilters();
+    }, []);
 
-    const uniqueUsers = ['All', ...new Set(logs.map(l => l.user))];
-    const uniqueActions = ['All', ...new Set(logs.map(l => l.action))];
+    useEffect(() => {
+        fetchLogs();
+    }, [fetchLogs]);
 
     const formatTime = (iso: string) => {
         const date = new Date(iso);
@@ -122,7 +181,7 @@ const AuditLog: React.FC = () => {
 
     const exportCSV = () => {
         const headers = ['Timestamp', 'User', 'Action', 'Entity Type', 'Entity ID', 'Old Value', 'New Value', 'IP', 'Device'];
-        const rows = filteredLogs.map(log => [log.timestamp, log.user, log.action, log.entity_type, log.entity_id, log.old_value, log.new_value, log.ip_address, log.device_info]);
+        const rows = logs.map(log => [log.timestamp, log.user, log.action, log.entity_type, log.entity_id, log.old_value, log.new_value, log.ip_address, log.device_info]);
         const csv = [headers, ...rows].map(row => row.map(cell => `"${cell}"`).join(',')).join('\n');
         const blob = new Blob([csv], { type: 'text/csv' });
         const url = window.URL.createObjectURL(blob);
@@ -132,6 +191,8 @@ const AuditLog: React.FC = () => {
         a.click();
         window.URL.revokeObjectURL(url);
     };
+
+    const totalPages = Math.ceil(totalLogs / logsPerPage);
 
     return (
         <Layout title="Audit Log">
@@ -145,6 +206,7 @@ const AuditLog: React.FC = () => {
                             </div>
                             Audit Log
                         </h1>
+                        <p className="text-sm text-slate-500 dark:text-slate-400 mt-1 font-medium">{totalLogs} total entries</p>
                     </div>
                     <div className="flex gap-2">
                         <button onClick={fetchLogs} className="btn-secondary flex items-center gap-2 !py-2.5">
@@ -162,18 +224,18 @@ const AuditLog: React.FC = () => {
                 <div className="card-modern p-5 space-y-4">
                     <div className="relative group">
                         <Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-brand-500 transition-colors" />
-                        <input type="text" placeholder="Search entity ID, user..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="input-modern !pl-12" />
+                        <input type="text" placeholder="Search entity ID, user..." value={searchTerm} onChange={e => { setSearchTerm(e.target.value); setCurrentPage(1); }} className="input-modern !pl-12" />
                     </div>
 
                     <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-                        <select value={filterUser} onChange={e => setFilterUser(e.target.value)} className="input-modern !py-2.5">
-                            {uniqueUsers.map(u => <option key={u} value={u}>{u === 'All' ? 'All Users' : u}</option>)}
+                        <select value={filterUser} onChange={e => { setFilterUser(e.target.value); setCurrentPage(1); }} className="input-modern !py-2.5">
+                            {availableUsers.map(u => <option key={u} value={u}>{u === 'All' ? 'All Users' : u}</option>)}
                         </select>
-                        <select value={filterAction} onChange={e => setFilterAction(e.target.value)} className="input-modern !py-2.5">
-                            {uniqueActions.map(a => <option key={a} value={a}>{a === 'All' ? 'All Actions' : a}</option>)}
+                        <select value={filterAction} onChange={e => { setFilterAction(e.target.value); setCurrentPage(1); }} className="input-modern !py-2.5">
+                            {availableActions.map(a => <option key={a} value={a}>{a === 'All' ? 'All Actions' : a}</option>)}
                         </select>
-                        <input type="date" value={filterFrom} onChange={e => setFilterFrom(e.target.value)} className="input-modern !py-2.5" />
-                        <input type="date" value={filterTo} onChange={e => setFilterTo(e.target.value)} className="input-modern !py-2.5" />
+                        <input type="date" value={filterFrom} onChange={e => { setFilterFrom(e.target.value); setCurrentPage(1); }} className="input-modern !py-2.5" />
+                        <input type="date" value={filterTo} onChange={e => { setFilterTo(e.target.value); setCurrentPage(1); }} className="input-modern !py-2.5" />
                     </div>
                 </div>
 
@@ -184,18 +246,20 @@ const AuditLog: React.FC = () => {
                             <RefreshCw className="animate-spin mb-3" size={32} />
                             <p className="font-medium">Loading logs...</p>
                         </div>
-                    ) : filteredLogs.length === 0 ? (
+                    ) : logs.length === 0 ? (
                         <div className="text-center py-20 card-modern p-8">
                             <FileText size={48} className="mx-auto text-slate-300 dark:text-slate-600 mb-4" />
                             <p className="text-lg font-bold text-slate-900 dark:text-slate-100">No audit logs found</p>
                         </div>
                     ) : (
-                        filteredLogs.map((log, index) => (
+                        logs.map((log, index) => {
+                            const changeSummary = parseChangeSummary(log.action, log.old_value, log.new_value);
+                            return (
                             <div key={index} className="card-modern overflow-hidden">
                                 <button onClick={() => setExpandedRow(expandedRow === index ? null : index)} className="w-full p-5 text-left">
                                     <div className="flex justify-between items-start">
                                         <div className="flex items-center gap-2.5 flex-wrap">
-                                            <span className={`text-xs font-bold px-2.5 py-1 rounded-md border ${actionColors[log.action] || 'bg-slate-100 text-slate-700 border-slate-200'}`}>
+                                            <span className={`text-xs font-bold px-2.5 py-1 rounded-md border ${actionColors[log.action] || 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 border-slate-200 dark:border-slate-700'}`}>
                                                 {log.action}
                                             </span>
                                             <span className="text-sm text-slate-500 dark:text-slate-400 font-medium">{formatTime(log.timestamp)}</span>
@@ -208,8 +272,19 @@ const AuditLog: React.FC = () => {
                                         <User size={14} className="text-slate-400" />
                                         <span className="font-bold text-slate-900 dark:text-slate-100">{log.user}</span>
                                         <span className="text-slate-400">→</span>
-                                        <span className="text-slate-600 dark:text-slate-300 truncate font-mono text-xs">{log.entity_type}: {log.entity_id.substring(0, 16)}...</span>
+                                        <span className="text-slate-600 dark:text-slate-300 truncate font-mono text-xs">{log.entity_type}: {(log.entity_id || '').substring(0, 16)}{(log.entity_id || '').length > 16 ? '...' : ''}</span>
                                     </div>
+                                    {/* Inline change summary */}
+                                    {changeSummary.length > 0 && (
+                                        <div className="flex flex-wrap gap-2 mt-2.5">
+                                            {changeSummary.map((change, ci) => (
+                                                <span key={ci} className="inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300">
+                                                    <ArrowRight size={10} />
+                                                    {change}
+                                                </span>
+                                            ))}
+                                        </div>
+                                    )}
                                 </button>
 
                                 {expandedRow === index && (
@@ -237,9 +312,33 @@ const AuditLog: React.FC = () => {
                                     </div>
                                 )}
                             </div>
-                        ))
+                            );
+                        })
                     )}
                 </div>
+
+                {/* Pagination */}
+                {totalPages > 1 && (
+                    <div className="flex items-center justify-center gap-4 py-4">
+                        <button
+                            onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                            disabled={currentPage === 1}
+                            className="px-4 py-2 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 disabled:opacity-30 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors text-sm font-medium"
+                        >
+                            Previous
+                        </button>
+                        <span className="text-sm font-semibold text-slate-600 dark:text-slate-300">
+                            Page {currentPage} of {totalPages}
+                        </span>
+                        <button
+                            onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                            disabled={currentPage === totalPages}
+                            className="px-4 py-2 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 disabled:opacity-30 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors text-sm font-medium"
+                        >
+                            Next
+                        </button>
+                    </div>
+                )}
             </div>
         </Layout>
     );

@@ -1,9 +1,13 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import Layout from '../components/common/Layout';
 import { useInventory } from '../contexts/InventoryContext';
 import { InventoryItem } from '../types';
-import { Plus, Trash2, Search, FileText, Calendar, Hash, X, Check, AlertCircle } from 'lucide-react';
+import { Plus, Trash2, Search, FileText, Calendar, Hash, X, Check, AlertCircle, Percent, CreditCard, Camera } from 'lucide-react';
 import { api } from '../services/api';
+import { useAuth } from '../contexts/AuthContext';
+import { UserRole } from '../types';
+import BarcodeScanner from '../components/common/BarcodeScanner';
+import { toast } from 'react-hot-toast';
 
 interface SaleLineItem {
   uuid: string;
@@ -17,6 +21,8 @@ interface SaleLineItem {
 
 const RecordSale: React.FC = () => {
   const { items, refreshInventory } = useInventory();
+  const { user } = useAuth();
+  const isAdmin = user?.role === UserRole.ADMIN;
 
   // Form State
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
@@ -34,6 +40,20 @@ const RecordSale: React.FC = () => {
   const [submitting, setSubmitting] = useState(false);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  // Discount State
+  const [discountType, setDiscountType] = useState<'percent' | 'fixed'>('percent');
+  const [discountValue, setDiscountValue] = useState('');
+
+  // Split Payment State
+  const [splitPayment, setSplitPayment] = useState(false);
+  const [primaryPaymentAmount, setPrimaryPaymentAmount] = useState('');
+  const [secondaryMethod, setSecondaryMethod] = useState<'Cash' | 'M-Pesa' | 'Credit'>('M-Pesa');
+
+  // Customer Auto-suggest
+  const [customerResults, setCustomerResults] = useState<any[]>([]);
+  const [showCustomerDropdown, setShowCustomerDropdown] = useState(false);
+  const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(null);
 
   // Filter inventory for search
   const searchResults = useMemo(() => {
@@ -55,6 +75,44 @@ const RecordSale: React.FC = () => {
     });
     return { revenue, cost, profit: revenue - cost };
   }, [lineItems]);
+
+  // Computed discount
+  const discountAmount = useMemo(() => {
+    const val = parseFloat(discountValue) || 0;
+    if (val <= 0) return 0;
+    if (discountType === 'percent') return Math.round(totals.revenue * (val / 100));
+    return Math.min(val, totals.revenue);
+  }, [discountType, discountValue, totals.revenue]);
+
+  const finalTotal = totals.revenue - discountAmount;
+
+  // Split payment calculations
+  const primaryAmount = splitPayment ? (parseFloat(primaryPaymentAmount) || 0) : finalTotal;
+  const secondaryAmount = splitPayment ? Math.max(0, finalTotal - primaryAmount) : 0;
+
+  // Customer search effect
+  useEffect(() => {
+    if (customerName.length < 2) { setCustomerResults([]); return; }
+    const timeout = setTimeout(async () => {
+      try {
+        const results = await api.customers.search(customerName);
+        setCustomerResults(results);
+        setShowCustomerDropdown(true);
+      } catch { setCustomerResults([]); }
+    }, 300);
+    return () => clearTimeout(timeout);
+  }, [customerName]);
+
+  // Barcode scan handler
+  const handleBarcodeScan = useCallback((code: string) => {
+    const item = items.find(i => i.part_number.toUpperCase() === code.toUpperCase());
+    if (item) {
+      addItem(item);
+      toast.success(`Added: ${item.name}`);
+    } else {
+      toast.error(`Item not found: ${code}`);
+    }
+  }, [items]);
 
   // Add item to sale
   const addItem = (item: InventoryItem) => {
@@ -90,6 +148,14 @@ const RecordSale: React.FC = () => {
     setLineItems(lineItems.filter(li => li.uuid !== uuid));
   };
 
+  // Select customer from dropdown
+  const selectCustomer = (customer: any) => {
+    setCustomerName(customer.name);
+    setSelectedCustomerId(customer.id);
+    setShowCustomerDropdown(false);
+    setCustomerResults([]);
+  };
+
   // Submit sale record
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -106,7 +172,18 @@ const RecordSale: React.FC = () => {
     setSubmitting(true);
     setError(null);
 
+    // Validate split payment
+    if (splitPayment && Math.abs(primaryAmount + secondaryAmount - finalTotal) > 1) {
+      setError('Split payment amounts must equal the total');
+      setSubmitting(false);
+      return;
+    }
+
     try {
+      const paymentsArray = splitPayment
+        ? [{ method: paymentMethod, amount: primaryAmount }, { method: secondaryMethod, amount: secondaryAmount }]
+        : [{ method: paymentMethod, amount: finalTotal }];
+
       const payload = {
         date: new Date(date).toISOString(),
         batch_id: receiptNo,
@@ -118,22 +195,42 @@ const RecordSale: React.FC = () => {
           unit_price: li.sold_for,
           buying_price_aed: li.buying_price_aed
         })),
-        total_kes: totals.revenue,
-        payment_method: paymentMethod,
+        total_kes: finalTotal,
+        payment_method: splitPayment ? `${paymentMethod}+${secondaryMethod}` : paymentMethod,
         customer_name: customerName,
-        notes: notes
+        customer_id: selectedCustomerId || undefined,
+        notes: notes,
+        discount_type: discountAmount > 0 ? discountType : undefined,
+        discount_value: discountAmount > 0 ? parseFloat(discountValue) : undefined,
+        discount_amount: discountAmount > 0 ? discountAmount : undefined,
+        payments: paymentsArray
       };
 
       await api.sales.create(payload);
+
+      // If credit sale with a customer, add credit entry
+      if (selectedCustomerId && (paymentMethod === 'Credit' || (splitPayment && secondaryMethod === 'Credit'))) {
+        const creditAmount = paymentMethod === 'Credit' ? primaryAmount : secondaryAmount;
+        if (creditAmount > 0) {
+          try {
+            await api.customers.recordPayment(selectedCustomerId, { amount: -creditAmount, reference: receiptNo });
+          } catch { /* Credit tracking is best-effort */ }
+        }
+      }
+
       await refreshInventory();
 
-      setSuccessMsg(`Sale #${receiptNo} recorded! Stock updated.`);
+      setSuccessMsg(`Sale #${receiptNo} recorded! Total: KES ${finalTotal.toLocaleString()}`);
 
       // Reset form
       setLineItems([]);
       setReceiptNo('');
       setCustomerName('');
+      setSelectedCustomerId(null);
       setNotes('');
+      setDiscountValue('');
+      setSplitPayment(false);
+      setPrimaryPaymentAmount('');
 
       setTimeout(() => setSuccessMsg(null), 5000);
     } catch (err: any) {
@@ -214,16 +311,52 @@ const RecordSale: React.FC = () => {
                 </select>
               </div>
 
-              <div className="space-y-1.5">
+              <div className="space-y-1.5 relative">
                 <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider pl-1">Customer</label>
                 <input
                   type="text"
                   value={customerName}
-                  onChange={e => setCustomerName(e.target.value)}
-                  placeholder="Optional"
+                  onChange={e => { setCustomerName(e.target.value); setSelectedCustomerId(null); }}
+                  onFocus={() => customerResults.length > 0 && setShowCustomerDropdown(true)}
+                  placeholder="Type to search..."
                   className="w-full p-3 bg-slate-50/50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-xl text-sm font-medium text-slate-900 dark:text-white placeholder-slate-400 focus:ring-2 focus:ring-brand-500/50 focus:border-brand-500 outline-none transition-all shadow-inner"
                 />
+                {selectedCustomerId && <span className="absolute right-3 top-8 text-xs text-emerald-500 font-bold">✓ Linked</span>}
+                {showCustomerDropdown && customerResults.length > 0 && (
+                  <div className="absolute z-30 w-full mt-1 glass-dropdown rounded-xl overflow-hidden animate-enter">
+                    {customerResults.map((c: any) => (
+                      <button key={c.id} type="button" onClick={() => selectCustomer(c)} className="w-full text-left p-3 hover:bg-slate-50 dark:hover:bg-slate-800/80 border-b border-slate-100 dark:border-slate-700/50 last:border-0 transition-colors text-sm">
+                        <span className="font-bold text-slate-900 dark:text-white">{c.name}</span>
+                        {c.phone && <span className="text-slate-400 ml-2">{c.phone}</span>}
+                        {c.total_credit > 0 && <span className="text-rose-500 ml-2 font-bold">Owes KES {c.total_credit.toLocaleString()}</span>}
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
+            </div>
+
+            {/* Split Payment */}
+            <div className="mt-4 pt-4 border-t border-slate-200 dark:border-slate-700/50">
+              <button type="button" onClick={() => setSplitPayment(!splitPayment)} className={`flex items-center gap-2 text-xs font-bold uppercase tracking-wider transition-colors ${splitPayment ? 'text-brand-600 dark:text-brand-400' : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-300'}`}>
+                <CreditCard size={14} />
+                Split Payment {splitPayment ? '(On)' : ''}
+              </button>
+              {splitPayment && (
+                <div className="grid grid-cols-2 gap-3 mt-3 animate-slide-up">
+                  <div className="space-y-1">
+                    <label className="text-xs font-bold text-slate-500">{paymentMethod} Amount</label>
+                    <input type="number" value={primaryPaymentAmount} onChange={e => setPrimaryPaymentAmount(e.target.value)} placeholder="Amount" className="input-modern !py-2.5" />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-xs font-bold text-slate-500">Second Method</label>
+                    <select value={secondaryMethod} onChange={e => setSecondaryMethod(e.target.value as any)} className="input-modern !py-2.5">
+                      {['Cash', 'M-Pesa', 'Credit'].filter(m => m !== paymentMethod).map(m => <option key={m} value={m}>{m}</option>)}
+                    </select>
+                    {secondaryAmount > 0 && <div className="text-xs font-bold text-brand-600 dark:text-brand-400">= KES {secondaryAmount.toLocaleString()}</div>}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 
@@ -236,7 +369,10 @@ const RecordSale: React.FC = () => {
                 </div>
                 Items Sold
               </h3>
-              <span className="text-xs font-bold text-slate-400 bg-slate-100 dark:bg-slate-800 px-3 py-1 rounded-full">{lineItems.length} items</span>
+              <div className="flex items-center gap-2">
+                <BarcodeScanner onScan={handleBarcodeScan} label="Scan" />
+                <span className="text-xs font-bold text-slate-400 bg-slate-100 dark:bg-slate-800 px-3 py-1 rounded-full">{lineItems.length} items</span>
+              </div>
             </div>
 
             {/* Search */}
@@ -290,7 +426,7 @@ const RecordSale: React.FC = () => {
                         <div className="font-bold text-sm text-slate-900 dark:text-white mb-1 leading-tight pr-6">{item.name}</div>
                         <div className="flex items-center gap-2 mb-2">
                           <div className="text-xs text-slate-500 font-mono font-bold bg-slate-100 dark:bg-slate-900 px-2 py-0.5 rounded border border-slate-200 dark:border-slate-700">{item.part_number}</div>
-                          <div className="text-xs text-slate-400 font-medium">Buy: AED {item.buying_price_aed}</div>
+                          {isAdmin && <div className="text-xs text-slate-400 font-medium">Buy: AED {item.buying_price_aed}</div>}
                         </div>
                       </div>
 
@@ -348,9 +484,33 @@ const RecordSale: React.FC = () => {
             />
           </div>
 
+          {/* Discount */}
+          {lineItems.length > 0 && (
+            <div className="glass-panel p-6 rounded-3xl border border-slate-200/60 dark:border-slate-800">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="p-2 bg-amber-100 dark:bg-amber-900/40 rounded-lg text-amber-600 dark:text-amber-400">
+                  <Percent size={18} />
+                </div>
+                <span className="text-sm font-bold text-slate-800 dark:text-slate-200">Discount</span>
+              </div>
+              <div className="flex gap-3 items-end">
+                <div className="flex bg-slate-100 dark:bg-slate-800 rounded-xl p-1 shrink-0">
+                  <button type="button" onClick={() => setDiscountType('percent')} className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${discountType === 'percent' ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-sm' : 'text-slate-500'}`}>%</button>
+                  <button type="button" onClick={() => setDiscountType('fixed')} className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${discountType === 'fixed' ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-sm' : 'text-slate-500'}`}>KES</button>
+                </div>
+                <input type="number" min="0" value={discountValue} onChange={e => setDiscountValue(e.target.value)} placeholder={discountType === 'percent' ? 'e.g. 10' : 'e.g. 500'} className="input-modern flex-1 !py-2.5" />
+                {discountAmount > 0 && (
+                  <div className="text-sm font-bold text-amber-600 dark:text-amber-400 whitespace-nowrap">
+                    -KES {discountAmount.toLocaleString()}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
           {/* Summary & Submit */}
           <div className="glass-panel p-6 rounded-3xl border border-slate-200/60 dark:border-slate-800 mt-8 mb-4">
-            <div className="grid grid-cols-3 gap-4 mb-6 text-center divide-x divide-slate-200 dark:divide-slate-700/50">
+            <div className={`grid ${isAdmin ? 'grid-cols-3' : 'grid-cols-2'} gap-4 mb-6 text-center divide-x divide-slate-200 dark:divide-slate-700/50`}>
               <div className="flex flex-col items-center justify-center py-2">
                 <div className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1.5">Total Items</div>
                 <div className="text-2xl font-black text-slate-900 dark:text-white">
@@ -358,17 +518,22 @@ const RecordSale: React.FC = () => {
                 </div>
               </div>
               <div className="flex flex-col items-center justify-center py-2">
-                <div className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1.5">Gross Revenue</div>
+                <div className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1.5">{discountAmount > 0 ? 'Final Total' : 'Gross Revenue'}</div>
                 <div className="text-2xl font-black bg-clip-text text-transparent bg-gradient-to-r from-brand-600 to-indigo-600 dark:from-brand-400 dark:to-indigo-400">
-                  KES {totals.revenue.toLocaleString()}
+                  KES {finalTotal.toLocaleString()}
                 </div>
+                {discountAmount > 0 && (
+                  <div className="text-xs text-slate-400 mt-1 line-through">KES {totals.revenue.toLocaleString()}</div>
+                )}
               </div>
+              {isAdmin && (
               <div className="flex flex-col items-center justify-center py-2">
                 <div className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1.5">Est. Profit</div>
-                <div className={`text-xl font-black ${totals.profit >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
-                  {totals.profit >= 0 ? '+' : ''}KES {Math.round(totals.profit).toLocaleString()}
+                <div className={`text-xl font-black ${totals.profit - discountAmount >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
+                  {totals.profit - discountAmount >= 0 ? '+' : ''}KES {Math.round(totals.profit - discountAmount).toLocaleString()}
                 </div>
               </div>
+              )}
             </div>
 
             <button
@@ -382,7 +547,7 @@ const RecordSale: React.FC = () => {
               {submitting ? 'Recording...' : (
                 <>
                   <Check strokeWidth={3} size={22} className="mr-2" />
-                  Record Sale & Deduct Stock
+                  Record Sale — KES {finalTotal.toLocaleString()}
                 </>
               )}
             </button>

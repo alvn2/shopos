@@ -285,8 +285,35 @@ const updateSingleItem = async (req, res) => {
         // Invalidate cache
         await redisCache.invalidatePattern('inventory:*');
 
-        // Audit log
+        // General audit log
         await logAudit(req.user.username, 'INVENTORY_UPDATE', 'INVENTORY', uuid, currentItem, sheetUpdates, req);
+
+        // Granular PRICE_CHANGE audit if any price field changed
+        const priceChanged =
+            (updates.selling_price !== undefined && String(updates.selling_price) !== String(parsePrice(currentItem.Selling_Price))) ||
+            (updates.aed_buying_price !== undefined && String(updates.aed_buying_price) !== String(parsePrice(currentItem.AED_Buying_Price))) ||
+            (updates.ksh_buying_price !== undefined && String(updates.ksh_buying_price) !== String(parsePrice(currentItem.KSH_Buying_Price)));
+
+        if (priceChanged) {
+            await logAudit(req.user.username, 'PRICE_CHANGE', 'INVENTORY', uuid, {
+                selling_price: parsePrice(currentItem.Selling_Price),
+                aed_buying_price: parsePrice(currentItem.AED_Buying_Price),
+                ksh_buying_price: parsePrice(currentItem.KSH_Buying_Price)
+            }, {
+                selling_price: updates.selling_price ?? parsePrice(currentItem.Selling_Price),
+                aed_buying_price: updates.aed_buying_price ?? parsePrice(currentItem.AED_Buying_Price),
+                ksh_buying_price: updates.ksh_buying_price ?? parsePrice(currentItem.KSH_Buying_Price)
+            }, req);
+        }
+
+        // Granular STOCK_OVERRIDE audit if stock changed via edit (not batch morning stock)
+        if (updates.stock_qty !== undefined && String(updates.stock_qty) !== String(parseInt(currentItem.Stock_Qty) || 0)) {
+            await logAudit(req.user.username, 'STOCK_OVERRIDE', 'INVENTORY', uuid, {
+                stock_qty: parseInt(currentItem.Stock_Qty) || 0
+            }, {
+                stock_qty: updates.stock_qty
+            }, req);
+        }
 
         res.json({ message: 'Item updated', uuid, success: true });
     } catch (error) {

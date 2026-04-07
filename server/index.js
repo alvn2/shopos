@@ -119,6 +119,7 @@ app.use('/api/sales', require('./routes/sales'));
 app.use('/api/reports', require('./routes/reports'));
 app.use('/api/settings', require('./routes/settings'));
 app.use('/api/audit', require('./routes/audit'));
+app.use('/api/customers', require('./routes/customers'));
 
 // Enhanced health check endpoint
 app.get('/api/health', async (req, res) => {

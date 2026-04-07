@@ -383,7 +383,19 @@ const AddItem: React.FC = () => {
                                     step="0.01"
                                     min="0"
                                     value={aedBuyingPrice}
-                                    onChange={e => setAedBuyingPrice(e.target.value)}
+                                    onChange={e => {
+                                        const val = e.target.value;
+                                        setAedBuyingPrice(val);
+                                        if (!sellingPrice) {
+                                            let cost = 0;
+                                            if (kshBuyingPrice && parseFloat(kshBuyingPrice) > 0) {
+                                                cost = parseFloat(kshBuyingPrice);
+                                            } else if (val && parseFloat(val) > 0) {
+                                                cost = parseFloat(val) * aedRate * (1 + conversionPercent / 100);
+                                            }
+                                            if (cost > 0) setSellingPrice((cost * 1.5).toFixed(0));
+                                        }
+                                    }}
                                     placeholder={existingMatch ? `Current: ${existingMatch.aed_buying_price}` : '0.00'}
                                     className="input-modern"
                                 />
@@ -403,7 +415,19 @@ const AddItem: React.FC = () => {
                                     step="1"
                                     min="0"
                                     value={kshBuyingPrice}
-                                    onChange={e => setKshBuyingPrice(e.target.value)}
+                                    onChange={e => {
+                                        const val = e.target.value;
+                                        setKshBuyingPrice(val);
+                                        if (!sellingPrice) {
+                                            let cost = 0;
+                                            if (val && parseFloat(val) > 0) {
+                                                cost = parseFloat(val);
+                                            } else if (aedBuyingPrice && parseFloat(aedBuyingPrice) > 0) {
+                                                cost = parseFloat(aedBuyingPrice) * aedRate * (1 + conversionPercent / 100);
+                                            }
+                                            if (cost > 0) setSellingPrice((cost * 1.5).toFixed(0));
+                                        }
+                                    }}
                                     placeholder={existingMatch ? `Current: ${existingMatch.ksh_buying_price || 0}` : '0'}
                                     className="input-modern"
                                 />

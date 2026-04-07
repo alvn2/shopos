@@ -53,8 +53,36 @@ export interface SaleRecord {
   total_kes: number;
   payment_method: 'Cash' | 'M-Pesa' | 'Credit';
   customer_name?: string;
+  customer_id?: string;
   notes?: string;
   sold_by: string;
+  discount_type?: 'percent' | 'fixed';
+  discount_value?: number;
+  discount_amount?: number;
+  payments?: Array<{ method: string; amount: number }>;
+}
+
+export interface Customer {
+  id: string;
+  name: string;
+  phone: string;
+  email?: string;
+  notes?: string;
+  total_purchases: number;
+  total_credit: number;
+  created_at: string;
+  created_by: string;
+}
+
+export interface CustomerLedgerEntry {
+  id: string;
+  customer_id: string;
+  type: 'purchase' | 'payment' | 'credit';
+  amount: number;
+  balance: number;
+  reference: string;
+  date: string;
+  recorded_by: string;
 }
 
 export interface Settings {

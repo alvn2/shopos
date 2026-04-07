@@ -655,6 +655,60 @@ export const api = {
     }
   },
 
+  // ------ AUDIT ------
+  audit: {
+    getLogs: async (params?: { user?: string; action?: string; from?: string; to?: string; search?: string; page?: number; limit?: number }): Promise<{ logs: any[]; total: number }> => {
+      const query = new URLSearchParams();
+      if (params?.user && params.user !== 'All') query.set('user', params.user);
+      if (params?.action && params.action !== 'All') query.set('action', params.action);
+      if (params?.from) query.set('from', params.from);
+      if (params?.to) query.set('to', params.to);
+      if (params?.search) query.set('search', params.search);
+      if (params?.page) query.set('page', params.page.toString());
+      if (params?.limit) query.set('limit', params.limit.toString());
+      return fetchAPI(`/audit?${query.toString()}`);
+    },
+    getUsers: async (): Promise<string[]> => {
+      const result = await fetchAPI<{ users: string[] }>('/audit/users');
+      return result.users;
+    },
+    getActions: async (): Promise<string[]> => {
+      const result = await fetchAPI<{ actions: string[] }>('/audit/actions');
+      return result.actions;
+    }
+  },
+
+  // ------ CUSTOMERS ------
+  customers: {
+    getAll: async (): Promise<any[]> => {
+      return fetchAPI('/customers');
+    },
+    create: async (data: { name: string; phone: string; email?: string; notes?: string }): Promise<any> => {
+      return fetchAPI('/customers', {
+        method: 'POST',
+        body: JSON.stringify(data)
+      });
+    },
+    update: async (id: string, updates: any): Promise<any> => {
+      return fetchAPI(`/customers/${id}`, {
+        method: 'PUT',
+        body: JSON.stringify(updates)
+      });
+    },
+    getLedger: async (id: string): Promise<any[]> => {
+      return fetchAPI(`/customers/${id}/ledger`);
+    },
+    recordPayment: async (id: string, data: { amount: number; reference?: string }): Promise<any> => {
+      return fetchAPI(`/customers/${id}/payment`, {
+        method: 'POST',
+        body: JSON.stringify(data)
+      });
+    },
+    search: async (query: string): Promise<any[]> => {
+      return fetchAPI(`/customers?search=${encodeURIComponent(query)}`);
+    }
+  },
+
   // ------ SYNC ------
   sync: {
     getPendingCount: (): number => syncQueue.getAll().length,

@@ -16,6 +16,7 @@ const Settings = lazy(() => import('./pages/Settings'));
 const ActiveSessions = lazy(() => import('./pages/ActiveSessions'));
 const LowStock = lazy(() => import('./pages/LowStock'));
 const AuditLog = lazy(() => import('./pages/AuditLog'));
+const Customers = lazy(() => import('./pages/Customers'));
 
 // Loading fallback with ShopOS branding
 const PageLoader: React.FC = () => (
@@ -134,6 +135,16 @@ const AppRoutes: React.FC = () => {
           element={
             <ProtectedRoute requireAdmin>
               <AuditLog />
+            </ProtectedRoute>
+          }
+        />
+
+        {/* Customer Profiles */}
+        <Route
+          path="/customers"
+          element={
+            <ProtectedRoute>
+              <Customers />
             </ProtectedRoute>
           }
         />

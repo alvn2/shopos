@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
-import { Package, FileText, BarChart2, ClipboardList, AlertTriangle, Plus, Settings, LogOut, User, ChevronDown, Smartphone, History, Moon, Sun } from 'lucide-react';
+import { Package, FileText, BarChart2, ClipboardList, AlertTriangle, Plus, Settings, LogOut, User, ChevronDown, Smartphone, History, Moon, Sun, Users } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { SyncIndicator } from '../../contexts/OfflineContext';
 import { UserRole } from '../../types';
@@ -110,6 +110,10 @@ const Layout: React.FC<LayoutProps> = ({ children, title }) => {
                             <AlertTriangle size={16} />
                             Alerts
                         </NavLink>
+                        <NavLink to="/customers" className={navLinkClass}>
+                            <Users size={16} />
+                            Customers
+                        </NavLink>
                     </nav>
 
                     {/* Dark Mode + User Menu */}
@@ -136,6 +140,7 @@ const Layout: React.FC<LayoutProps> = ({ children, title }) => {
                                 <User size={16} className="text-slate-600 dark:text-slate-300" />
                             </div>
                             <span className="text-sm font-semibold text-slate-700 dark:text-slate-200">{user?.full_name}</span>
+                            <span className={`text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-md ${user?.role === UserRole.ADMIN ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300' : 'bg-slate-100 text-slate-500 dark:bg-slate-700 dark:text-slate-400'}`}>{user?.role}</span>
                             <ChevronDown size={14} className={`text-slate-400 transition-transform duration-300 ${userMenuOpen ? 'rotate-180' : ''}`} />
                         </button>
 
@@ -262,6 +267,9 @@ const Layout: React.FC<LayoutProps> = ({ children, title }) => {
                             </NavLink>
                             <NavLink to="/low-stock" onClick={() => setUserMenuOpen(false)} className="flex items-center gap-3 px-5 py-2.5 text-sm font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-50/50 dark:hover:bg-slate-700/50 transition-colors">
                                 <AlertTriangle size={18} className="text-amber-500" /> Alerts
+                            </NavLink>
+                            <NavLink to="/customers" onClick={() => setUserMenuOpen(false)} className="flex items-center gap-3 px-5 py-2.5 text-sm font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-50/50 dark:hover:bg-slate-700/50 transition-colors">
+                                <Users size={18} className="text-teal-500" /> Customers
                             </NavLink>
 
                             {user?.role === UserRole.ADMIN && (

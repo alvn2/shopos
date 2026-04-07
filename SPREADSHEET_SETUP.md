@@ -53,6 +53,8 @@ This guide will help you set up the Google Sheets database for ShopOS.
 
 Create 6 tabs (sheets) with these exact names and columns:
 
+> **Note:** Two additional tabs (`CUSTOMERS` and `CUSTOMER_LEDGER`) will be auto-created by the backend on first use. You don't need to create them manually.
+
 ### Tab 1: INVENTORY
 | Column | Header |
 |--------|--------|
