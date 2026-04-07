@@ -6,6 +6,8 @@ import { v4 as uuidv4 } from 'uuid';
 import { Save, Package, AlertCircle, Check, Zap, RefreshCw, ArrowRight, Layers } from 'lucide-react';
 import { PartMake, InventoryItem } from '../types';
 import { useAuth } from '../contexts/AuthContext';
+import BarcodeScanner from '../components/common/BarcodeScanner';
+import { toast } from 'react-hot-toast';
 
 const AddItem: React.FC = () => {
     const { items, addLocalItem, updateLocalItem, settings, refreshInventory } = useInventory();
@@ -63,6 +65,12 @@ const AddItem: React.FC = () => {
             return itemPN === normalizedPN && itemMake !== normalizedMake;
         });
     }, [partNumber, make, items]);
+
+    // Handle barcode scan
+    const handleBarcodeScan = (code: string) => {
+        setPartNumber(code);
+        toast.success('Barcode scanned');
+    };
 
     const resetForm = () => {
         setPartNumber('');
@@ -256,9 +264,10 @@ const AddItem: React.FC = () => {
                         </h2>
 
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div className="space-y-1.5">
-                                <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider pl-1">
-                                    Part Number <span className="text-rose-500">*</span>
+                            <div className="space-y-1.5 pt-1">
+                                <label className="flex items-center justify-between text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider pl-1 mb-1.5">
+                                    <span>Part Number <span className="text-rose-500">*</span></span>
+                                    <BarcodeScanner onScan={handleBarcodeScan} label="Scan Sticker" />
                                 </label>
                                 <input
                                     ref={partNumberRef}
