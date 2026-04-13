@@ -1,15 +1,7 @@
-const { Worker } = require('bullmq');
-const Redis = require('ioredis');
 const sheets = require('../services/sheets');
 const redisCache = require('../services/redisCache');
 
 const TABS = sheets.TABS;
-
-// Worker connection
-const connection = new Redis(process.env.REDIS_URL || 'redis://127.0.0.1:6379', {
-    maxRetriesPerRequest: null,
-    enableReadyCheck: false
-});
 
 /**
  * Audit Log Helper for Worker
@@ -32,10 +24,13 @@ async function logAuditWorker(user, action, entityType, entityId, oldValue, newV
     }
 }
 
-// Create the worker
-const sheetsWorker = new Worker('sheets-writes', async (job) => {
-    console.log(`[Worker] Started processing job ${job.id} (${job.name})`);
+/**
+ * Process a job from the queue
+ * @param {Object} job
+ */
+async function processJob(job) {
     const { name, data } = job;
+    console.log(`[Worker] Started processing job (${name})`);
 
     try {
         if (name === 'record-sale') {
@@ -93,36 +88,23 @@ const sheetsWorker = new Worker('sheets-writes', async (job) => {
             // 4. Clear Sales Cache and Inventory Cache
             // We use wildcard invalidation if supported, or targeted keys
             await redisCache.invalidatePattern('inventory:*');
-            // Assuming we also add sales caching eventually
 
-            console.log(`[Worker] Job ${job.id} completed (record-sale) for batch ${saleRecord.Batch_ID}`);
+            console.log(`[Worker] Job completed (record-sale) for batch ${saleRecord.Batch_ID}`);
             return { success: true, batchId: saleRecord.Batch_ID };
 
         } else if (name === 'update-inventory') {
-            // For general inventory updates handled asynchronously (if configured)
-            // Currently implemented sync in route, but we leave hook here
-            // ...
-
             await redisCache.invalidatePattern('inventory:*');
             return { success: true };
         } else {
             throw new Error(`Unknown job type: ${name}`);
         }
     } catch (error) {
-        console.error(`[Worker] Job ${job.id} failed:`, error.message);
-        throw error; // Let BullMQ handle retries
+        console.error(`[Worker] Job failed:`, error.message);
+        throw error;
     }
-}, {
-    connection,
-    concurrency: 1, // Crucial for Google Sheets API limits and preventing conflicts
-});
+}
 
-sheetsWorker.on('completed', (job) => {
-    // console.log(`[Worker] Job ${job.id} has completed!`);
-});
-
-sheetsWorker.on('failed', (job, err) => {
-    console.error(`[Worker] Job ${job.id} has failed with ${err.message}`);
-});
-
-module.exports = sheetsWorker;
+module.exports = {
+    processJob,
+    close: async () => {} // Dummy method to satisfy graceful shutdown logic in index.js
+};

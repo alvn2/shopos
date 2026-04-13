@@ -6,7 +6,6 @@ import { v4 as uuidv4 } from 'uuid';
 import { Save, Package, AlertCircle, Check, Zap, RefreshCw, ArrowRight, Layers } from 'lucide-react';
 import { PartMake, InventoryItem } from '../types';
 import { useAuth } from '../contexts/AuthContext';
-import OcrScanner, { OcrResult } from '../components/common/OcrScanner';
 import { toast } from 'react-hot-toast';
 
 const AddItem: React.FC = () => {
@@ -66,21 +65,6 @@ const AddItem: React.FC = () => {
         });
     }, [partNumber, make, items]);
 
-    // Handle OCR scan
-    const handleOcrScan = (result: OcrResult) => {
-        if (result.partNumber) {
-            setPartNumber(result.partNumber);
-        }
-        if (result.name) {
-            setName(result.name);
-        }
-        if (result.partNumber || result.name) {
-            toast.success('Sticker data extracted');
-        } else {
-            // Give user raw info if nothing matched cleanly
-            toast.success('Sticker scanned, check part number field');
-        }
-    };
 
     const resetForm = () => {
         setPartNumber('');
@@ -277,7 +261,6 @@ const AddItem: React.FC = () => {
                             <div className="space-y-1.5 pt-1">
                                 <label className="flex items-center justify-between text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider pl-1 mb-1.5">
                                     <span>Part Number <span className="text-rose-500">*</span></span>
-                                    <OcrScanner onScan={handleOcrScan} label="Scan Sticker" />
                                 </label>
                                 <input
                                     ref={partNumberRef}
