@@ -252,42 +252,29 @@ const Inventory: React.FC = () => {
     }
   };
 
-  const handleDelete = useCallback((uuid: string) => {
+  const [deleteItem, setDeleteItem] = useState<InventoryItem | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  const handleDeleteClick = useCallback((uuid: string) => {
     const item = localItems.find(i => i.uuid === uuid);
-    toast((t) => (
-      <div className="flex items-center gap-3">
-        <AlertTriangle size={18} className="text-amber-500 shrink-0" />
-        <div>
-          <p className="font-semibold text-sm">Delete "{item?.name}"?</p>
-          <p className="text-xs text-slate-500">This cannot be undone</p>
-        </div>
-        <div className="flex gap-2 ml-2">
-          <button
-            onClick={() => toast.dismiss(t.id)}
-            className="px-3 py-1.5 text-xs font-medium bg-slate-100 dark:bg-slate-700 rounded-lg"
-          >
-            Cancel
-          </button>
-          <button
-            onClick={async () => {
-              toast.dismiss(t.id);
-              try {
-                removeLocalItem(uuid);
-                await api.inventory.delete(uuid);
-                toast.success('Item deleted');
-              } catch (e: any) {
-                toast.error(e?.message || 'Delete failed');
-                refreshInventory();
-              }
-            }}
-            className="px-3 py-1.5 text-xs font-bold bg-rose-500 text-white rounded-lg"
-          >
-            Delete
-          </button>
-        </div>
-      </div>
-    ), { duration: 8000 });
-  }, [localItems, removeLocalItem, refreshInventory]);
+    if (item) setDeleteItem(item);
+  }, [localItems]);
+
+  const confirmDelete = async () => {
+    if (!deleteItem) return;
+    setIsDeleting(true);
+    try {
+      removeLocalItem(deleteItem.uuid);
+      await api.inventory.delete(deleteItem.uuid);
+      toast.success('Item deleted');
+      setDeleteItem(null);
+    } catch (e: any) {
+      toast.error(e?.message || 'Delete failed');
+      refreshInventory();
+    } finally {
+      setIsDeleting(false);
+    }
+  };
 
   const openEditModal = useCallback((item: InventoryItem) => {
     setEditingItem(item);
@@ -462,7 +449,7 @@ const Inventory: React.FC = () => {
                   profitMargin={profitMargin}
                   onAdjust={handleAdjust}
                   onEdit={openEditModal}
-                  onDelete={handleDelete}
+                  onDelete={handleDeleteClick}
                   onPrintBarcode={setBarcodeItem}
                 />
               );
@@ -605,6 +592,30 @@ const Inventory: React.FC = () => {
               <button onClick={handleEditSave} disabled={editSaving} className="flex-1 btn-primary !py-2.5">
                 {editSaving ? <RotateCcw className="animate-spin mr-2" size={18} /> : <Save className="mr-2" size={18} />}
                 Save Changes
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {deleteItem && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/40 dark:bg-black/60 backdrop-blur-sm animate-fade-in">
+          <div className="card-modern shadow-2xl w-full max-w-sm animate-slide-up border border-rose-100 dark:border-rose-900/50">
+            <div className="p-6 text-center space-y-4">
+              <div className="mx-auto w-16 h-16 bg-rose-100 dark:bg-rose-900/50 text-rose-500 rounded-full flex items-center justify-center mb-2 shadow-inner">
+                <Trash2 size={28} />
+              </div>
+              <h2 className="text-xl font-black text-slate-900 dark:text-white">Delete Item?</h2>
+              <p className="text-slate-500 dark:text-slate-400 text-sm">
+                Are you sure you want to delete <strong className="text-slate-700 dark:text-slate-200">{deleteItem.name}</strong>? This action cannot be undone.
+              </p>
+            </div>
+            <div className="p-4 border-t border-slate-100 dark:border-slate-800/50 flex gap-3 bg-slate-50/50 dark:bg-slate-800/20">
+              <button onClick={() => setDeleteItem(null)} className="flex-1 btn-secondary !py-2.5">Cancel</button>
+              <button onClick={confirmDelete} disabled={isDeleting} className="flex-1 px-4 py-2.5 bg-rose-500 hover:bg-rose-600 active:scale-95 transition-all text-white font-bold rounded-xl flex items-center justify-center shadow-lg shadow-rose-500/20">
+                {isDeleting ? <RotateCcw className="animate-spin mr-2" size={18} /> : <Trash2 className="mr-2" size={18} />}
+                Delete
               </button>
             </div>
           </div>
