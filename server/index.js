@@ -129,7 +129,7 @@ app.get('/api/health', async (req, res) => {
             version: process.env.npm_package_version || '1.0.0',
             environment: process.env.NODE_ENV || 'development',
             database: 'connected',
-            cache: cacheStats
+            cache: { type: 'redis', status: redisCache.redisClient ? redisCache.redisClient.status : 'disconnected' }
         });
     } catch (error) {
         logger.error('Health check failed', { error });

@@ -4,7 +4,7 @@
     "description": "ShopOS Backend - Google Sheets API Integration",
     "main": "index.js",
     "scripts": {
-        "start": "node index.js",
+        "start": "npx prisma generate && node index.js",
         "dev": "node --watch index.js",
         "postinstall": "npx prisma generate"
     },
