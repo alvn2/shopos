@@ -53,10 +53,15 @@ async function createSession(shop_id, username, deviceInfo, ipAddress) {
 async function validateSession(sessionId) {
     if (!sessionId) return null;
 
-    const session = await prisma.session.findUnique({
-        where: { session_id: sessionId },
-        include: { user: true }
-    });
+    let session;
+    try {
+        session = await prisma.session.findUnique({
+            where: { session_id: sessionId },
+            include: { user: true }
+        });
+    } catch (e) {
+        return null;
+    }
 
     if (!session) return null;
 
