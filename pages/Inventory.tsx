@@ -19,13 +19,14 @@ const InventoryRow = memo<{
   isModified: boolean;
   isAdmin: boolean;
   isWorker: boolean;
+  showAED: boolean;
   landedCostKES: number;
   profitMargin: number;
   onAdjust: (uuid: string, delta: number) => void;
   onEdit: (item: InventoryItem) => void;
   onDelete: (uuid: string) => void;
   onPrintBarcode: (item: InventoryItem) => void;
-}>(({ item, original, isModified, isAdmin, isWorker, landedCostKES, profitMargin, onAdjust, onEdit, onDelete, onPrintBarcode }) => (
+}>(({ item, original, isModified, isAdmin, isWorker, showAED, landedCostKES, profitMargin, onAdjust, onEdit, onDelete, onPrintBarcode }) => (
   <div className={`relative overflow-hidden group card-modern p-5 lg:p-6 transition-all duration-200 ${isModified ? 'border-amber-400 dark:border-amber-500/50 ring-2 ring-amber-500/10' : 'hover:border-brand-300 dark:hover:border-brand-500/50'}`}>
 
     {/* Item Header */}
