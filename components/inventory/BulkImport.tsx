@@ -4,6 +4,7 @@ import * as XLSX from 'xlsx';
 import { api } from '../../services/api';
 import { PartMake } from '../../types';
 import { useInventory } from '../../contexts/InventoryContext';
+import { useAuth } from '../../contexts/AuthContext';
 
 interface ImportItem {
     part_number: string;
@@ -46,6 +47,9 @@ const BulkImport: React.FC<BulkImportProps> = ({ onComplete, onClose }) => {
     const [importing, setImporting] = useState(false);
     
     const { settings } = useInventory();
+    const { user } = useAuth();
+    const showAED = user?.shop_id !== 'CARWORLD';
+    
     const aedRate = settings?.aed_rate || 36.5;
     const conversionPercent = settings?.conversion_percent || 13;
 
@@ -332,7 +336,7 @@ const BulkImport: React.FC<BulkImportProps> = ({ onComplete, onClose }) => {
                                                 <th className="px-2 py-1 text-left">Part #</th>
                                                 <th className="px-2 py-1 text-left">Name</th>
                                                 <th className="px-2 py-1 text-left">Make</th>
-                                                <th className="px-2 py-1 text-right">AED</th>
+                                                {showAED && <th className="px-2 py-1 text-right">AED</th>}
                                                 <th className="px-2 py-1 text-right">KSH</th>
                                                 <th className="px-2 py-1 text-right">Sell</th>
                                                 <th className="px-2 py-1 text-right">Qty</th>
@@ -346,7 +350,7 @@ const BulkImport: React.FC<BulkImportProps> = ({ onComplete, onClose }) => {
                                                     <td className={`px-2 py-1 ${item.make === 'Genuine' ? 'text-green-600' : item.make === 'Japan' ? 'text-purple-600' : 'text-gray-500'}`}>
                                                         {item.make}
                                                     </td>
-                                                    <td className="px-2 py-1 text-right">{item.aed_buying_price}</td>
+                                                    {showAED && <td className="px-2 py-1 text-right">{item.aed_buying_price}</td>}
                                                     <td className="px-2 py-1 text-right">{item.ksh_buying_price}</td>
                                                     <td className="px-2 py-1 text-right">{item.selling_price?.toLocaleString()}</td>
                                                     <td className="px-2 py-1 text-right">{item.stock_qty}</td>

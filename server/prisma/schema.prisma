@@ -1,0 +1,141 @@
+generator client {
+  provider   = "prisma-client-js"
+  engineType = "library"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+enum ShopName {
+  STEPMOTORS
+  CARWORLD
+}
+
+enum UserRole {
+  admin
+  counter
+  worker
+}
+
+model User {
+  uuid          String    @id @default(uuid()) @db.Uuid
+  shop_id       ShopName
+  username      String
+  password_hash String
+  role          UserRole  @default(worker)
+  full_name     String
+  created_at    DateTime  @default(now())
+  last_login    DateTime?
+  is_active     Boolean   @default(true)
+  sessions      Session[]
+  sales         Sale[]
+
+  @@unique([shop_id, username])
+}
+
+model Session {
+  session_id   String   @id @default(uuid()) @db.Uuid
+  shop_id      ShopName
+  user_uuid    String   @db.Uuid
+  device_info  String
+  ip_address   String
+  created_at   DateTime @default(now())
+  last_active  DateTime @default(now())
+  expires_at   DateTime
+  
+  user         User     @relation(fields: [user_uuid], references: [uuid], onDelete: Cascade)
+}
+
+model InventoryItem {
+  uuid             String    @id @default(uuid()) @db.Uuid
+  shop_id          ShopName
+  part_number      String
+  name             String
+  tags             String?   // comma-separated
+  make             String
+  aed_buying_price Float?    @default(0) // Used primarily by Stepmotors
+  ksh_buying_price Float     @default(0)
+  selling_price    Float
+  stock_qty        Int       @default(0)
+  min_stock        Int       @default(0)
+  last_updated     DateTime  @default(now()) @updatedAt
+  updated_by       String
+  is_deleted       Boolean   @default(false)
+  deleted_at       DateTime?
+  deleted_by       String?
+
+  @@unique([shop_id, part_number])
+}
+
+model Sale {
+  uuid            String    @id @default(uuid()) @db.Uuid
+  shop_id         ShopName
+  batch_id        String
+  items_json      String    // Storing items as JSON to match original architecture easily
+  total_kes       Float
+  payment_method  String
+  customer_name   String?
+  customer_id     String?   @db.Uuid
+  notes           String?
+  sold_by         String    @db.Uuid
+  discount_type   String?
+  discount_value  Float?
+  discount_amount Float?
+  date            DateTime  @default(now())
+  
+  user            User      @relation(fields: [sold_by], references: [uuid])
+  customer        Customer? @relation(fields: [customer_id], references: [uuid])
+}
+
+model Customer {
+  uuid            String    @id @default(uuid()) @db.Uuid
+  shop_id         ShopName
+  name            String
+  phone           String
+  email           String?
+  notes           String?
+  total_purchases Float     @default(0)
+  total_credit    Float     @default(0)
+  created_at      DateTime  @default(now())
+  created_by      String    @db.Uuid
+  
+  sales           Sale[]
+  ledger          CustomerLedgerEntry[]
+
+  @@unique([shop_id, phone])
+}
+
+model CustomerLedgerEntry {
+  uuid         String    @id @default(uuid()) @db.Uuid
+  shop_id      ShopName
+  customer_id  String    @db.Uuid
+  type         String    // purchase, payment, credit
+  amount       Float
+  balance      Float
+  reference    String
+  date         DateTime  @default(now())
+  recorded_by  String    @db.Uuid
+
+  customer     Customer  @relation(fields: [customer_id], references: [uuid], onDelete: Cascade)
+}
+
+model Settings {
+  shop_id            ShopName @id
+  aed_rate           Float    @default(36.5)
+  conversion_percent Float    @default(13.0)
+  default_min_stock  Int      @default(5)
+  updated_at         DateTime @default(now()) @updatedAt
+}
+
+model AuditLog {
+  uuid        String   @id @default(uuid()) @db.Uuid
+  shop_id     ShopName
+  timestamp   DateTime @default(now())
+  user        String
+  action      String
+  details     String
+  ip_address  String?
+}

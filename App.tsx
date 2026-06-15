@@ -6,6 +6,7 @@ import { OfflineProvider } from './contexts/OfflineContext';
 import { Toaster } from 'react-hot-toast';
 
 // Lazy-loaded pages for code splitting
+const Landing = lazy(() => import('./pages/Landing'));
 const Login = lazy(() => import('./pages/Login'));
 const Inventory = lazy(() => import('./pages/Inventory'));
 const AddItem = lazy(() => import('./pages/AddItem'));
@@ -18,12 +19,12 @@ const LowStock = lazy(() => import('./pages/LowStock'));
 const AuditLog = lazy(() => import('./pages/AuditLog'));
 const Customers = lazy(() => import('./pages/Customers'));
 
-// Loading fallback with ShopOS branding
+// Loading fallback with utilitarian branding
 const PageLoader: React.FC = () => (
-  <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-950">
+  <div className="min-h-screen flex items-center justify-center bg-white dark:bg-black">
     <div className="flex flex-col items-center gap-4 animate-pulse">
-      <div className="w-12 h-12 bg-gradient-to-br from-indigo-500 via-brand-500 to-cyan-400 rounded-xl shadow-lg" />
-      <div className="h-2 w-24 bg-slate-200 dark:bg-slate-700 rounded-full" />
+      <div className="w-12 h-12 bg-black dark:bg-white text-white dark:text-black flex items-center justify-center font-bold tracking-tighter">OS</div>
+      <div className="h-2 w-24 bg-gray-200 dark:bg-gray-800 rounded-none" />
     </div>
   </div>
 );
@@ -34,7 +35,7 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode; requireAdmin?: boole
     return <Navigate to="/login" replace />;
   }
   if (requireAdmin && user?.role !== 'admin') {
-    return <Navigate to="/" replace />;
+    return <Navigate to="/inventory" replace />;
   }
   return <>{children}</>;
 };
@@ -43,11 +44,14 @@ const AppRoutes: React.FC = () => {
   return (
     <Suspense fallback={<PageLoader />}>
       <Routes>
+        {/* Root Redirect */}
+        <Route path="/" element={<Navigate to="/inventory" replace />} />
+
         <Route path="/login" element={<Login />} />
 
         {/* Main Inventory View */}
         <Route
-          path="/"
+          path="/inventory"
           element={
             <ProtectedRoute>
               <Inventory />
@@ -56,8 +60,7 @@ const AppRoutes: React.FC = () => {
         />
 
         {/* Legacy routes redirect */}
-        <Route path="/inventory" element={<Navigate to="/" replace />} />
-        <Route path="/stock" element={<Navigate to="/" replace />} />
+        <Route path="/stock" element={<Navigate to="/inventory" replace />} />
 
         {/* Add New Inventory Item */}
         <Route

@@ -5,11 +5,10 @@ const cors = require('cors');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 const cron = require('node-cron');
-const sheets = require('./services/sheets');
+const { connectDB, disconnectDB } = require('./services/prisma');
 const sessionService = require('./services/session');
 const cache = require('./services/cache'); // Keeping for non-replaced route endpoints if any
 const redisCache = require('./services/redisCache');
-const sheetsWorker = require('./workers/sheetsWorker');
 const { logger, requestIdMiddleware, requestLoggerMiddleware, metrics, metricsMiddleware } = require('./services/logger');
 const { requestTimeout, additionalSecurityHeaders, getLockoutStats } = require('./middleware/security');
 const { sanitizeBody } = require('./middleware/validation');
@@ -124,17 +123,12 @@ app.use('/api/customers', require('./routes/customers'));
 // Enhanced health check endpoint
 app.get('/api/health', async (req, res) => {
     try {
-        const sheetsStatus = await sheets.testConnection();
-        const cacheStats = { type: 'redis', status: redisCache.redisClient ? redisCache.redisClient.status : 'disconnected' };
-
         res.json({
             status: 'ok',
             timestamp: new Date().toISOString(),
             version: process.env.npm_package_version || '1.0.0',
             environment: process.env.NODE_ENV || 'development',
-            sheets: sheetsStatus.connected ? 'connected' : 'disconnected',
-            sheets_title: sheetsStatus.title,
-            available_tabs: sheetsStatus.sheets,
+            database: 'connected',
             cache: cacheStats
         });
     } catch (error) {
@@ -149,12 +143,7 @@ app.get('/api/health', async (req, res) => {
 // Kubernetes-style readiness probe
 app.get('/api/ready', async (req, res) => {
     try {
-        const sheetsStatus = await sheets.testConnection();
-        if (sheetsStatus.connected) {
-            res.json({ ready: true });
-        } else {
-            res.status(503).json({ ready: false, reason: 'Google Sheets not connected' });
-        }
+        res.json({ ready: true });
     } catch (error) {
         res.status(503).json({ ready: false, reason: error.message });
     }
@@ -243,15 +232,12 @@ const server = app.listen(PORT, () => {
 ╚════════════════════════════════════════════════════════╝
   `);
 
-    // Test Google Sheets connection on startup
-    sheets.testConnection().then(result => {
-        if (result.connected) {
-            logger.info('Google Sheets connected', { title: result.title, sheets: result.sheets });
-            console.log(`✅ Google Sheets connected: "${result.title}"`);
-            console.log(`   Available tabs: ${result.sheets.join(', ')}`);
+    // Test Postgres connection on startup
+    connectDB().then(success => {
+        if (success) {
+            console.log(`✅ Postgres connected`);
         } else {
-            logger.error('Google Sheets connection failed', { error: result.error });
-            console.log(`❌ Google Sheets not connected: ${result.error}`);
+            console.log(`❌ Postgres not connected`);
             console.log(`   Make sure your .env file is configured correctly`);
         }
     });
@@ -275,17 +261,16 @@ const gracefulShutdown = (signal) => {
 
         // Perform cleanup tasks
         Promise.all([
-            // Clean up cache and worker
+            // Clean up cache, worker, and database
             new Promise(async (resolve) => {
                 try {
-                    if (sheetsWorker) await sheetsWorker.close();
+                    await disconnectDB();
                     if (redisCache.redisClient) redisCache.redisClient.disconnect();
                 } catch (e) {
-                    console.error('Error during Redis/Worker cleanup', e);
+                    console.error('Error during cleanup', e);
                 }
                 resolve();
             }),
-            // Could add database connection cleanup here in future
         ]).then(() => {
             logger.info('Graceful shutdown completed');
             console.log('Cleanup complete. Exiting.');

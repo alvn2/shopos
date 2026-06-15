@@ -13,58 +13,37 @@ export default {
         extend: {
             colors: {
                 brand: {
-                    50: '#f4f6fc',
-                    100: '#e6ebf8',
-                    200: '#cdd7f0',
-                    300: '#a3bce4',
-                    400: '#7298d3',
-                    500: '#4e76c1',
-                    600: '#3a5aa7',
-                    700: '#2f4886',
-                    800: '#293d6d',
-                    900: '#253457',
-                    950: '#182136',
-                },
-                glass: {
-                    light: 'rgba(255, 255, 255, 0.7)',
-                    dark: 'rgba(30, 41, 59, 0.7)',
-                    border: 'rgba(255, 255, 255, 0.1)',
-                },
-                accent: {
-                    cyan: '#22d3ee',
-                    indigo: '#6366f1',
-                    purple: '#a855f7',
-                    pink: '#ec4899',
+                    50: '#f0f4f8',
+                    100: '#d9e2ec',
+                    200: '#bcccdc',
+                    300: '#9fb3c8',
+                    400: '#829ab1',
+                    500: '#627d98',
+                    600: '#486581',
+                    700: '#334e68',
+                    800: '#243b53',
+                    900: '#102a43',
+                    950: '#0a192f',
                 }
             },
-            backgroundImage: {
-                'mesh-light': 'radial-gradient(at 0% 0%, hsla(253,16%,7%,1) 0, transparent 50%), radial-gradient(at 50% 0%, hsla(225,39%,30%,1) 0, transparent 50%), radial-gradient(at 100% 0%, hsla(339,49%,30%,1) 0, transparent 50%)',
-                'mesh-dark': 'radial-gradient(at 40% 20%, hsla(28,100%,74%,1) 0px, transparent 50%), radial-gradient(at 80% 0%, hsla(189,100%,56%,1) 0px, transparent 50%), radial-gradient(at 0% 50%, hsla(355,100%,93%,1) 0px, transparent 50%)',
-                'gradient-radial': 'radial-gradient(var(--tw-gradient-stops))',
-            },
             boxShadow: {
-                'glow': '0 0 15px -3px var(--tw-shadow-color)',
-                'glow-lg': '0 0 25px -5px var(--tw-shadow-color)',
-                'glass': '0 8px 32px 0 rgba(31, 38, 135, 0.07)',
+                'sleek': '0 4px 6px -1px rgba(16, 42, 67, 0.1), 0 2px 4px -1px rgba(16, 42, 67, 0.06)',
+                'sleek-lg': '0 10px 15px -3px rgba(16, 42, 67, 0.1), 0 4px 6px -2px rgba(16, 42, 67, 0.05)',
+                'sleek-dark': '0 4px 6px -1px rgba(0, 0, 0, 0.5), 0 2px 4px -1px rgba(0, 0, 0, 0.3)',
+                'sleek-lg-dark': '0 10px 15px -3px rgba(0, 0, 0, 0.5), 0 4px 6px -2px rgba(0, 0, 0, 0.3)',
             },
             animation: {
-                'fade-in-up': 'fadeInUp 0.5s ease-out forwards',
-                'pulse-slow': 'pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite',
-                'scale-in': 'scaleIn 0.2s ease-out forwards',
-                'float': 'float 6s ease-in-out infinite',
+                'fade-in': 'fadeIn 0.2s ease-out forwards',
+                'slide-in': 'slideIn 0.2s ease-out forwards',
             },
             keyframes: {
-                fadeInUp: {
-                    '0%': { opacity: '0', transform: 'translateY(10px)' },
+                fadeIn: {
+                    '0%': { opacity: '0' },
+                    '100%': { opacity: '1' },
+                },
+                slideIn: {
+                    '0%': { opacity: '0', transform: 'translateY(5px)' },
                     '100%': { opacity: '1', transform: 'translateY(0)' },
-                },
-                scaleIn: {
-                    '0%': { opacity: '0', transform: 'scale(0.95)' },
-                    '100%': { opacity: '1', transform: 'scale(1)' },
-                },
-                float: {
-                    '0%, 100%': { transform: 'translateY(0)' },
-                    '50%': { transform: 'translateY(-10px)' },
                 }
             }
         },

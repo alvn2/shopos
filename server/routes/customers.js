@@ -1,41 +1,8 @@
 const express = require('express');
-const { v4: uuidv4 } = require('uuid');
-const sheets = require('../services/sheets');
+const { prisma } = require('../services/prisma');
 const { authenticateSession, requireCounterOrAdmin } = require('../middleware/auth');
 
 const router = express.Router();
-
-// Tab names for customers
-const CUSTOMERS_TAB = 'CUSTOMERS';
-const LEDGER_TAB = 'CUSTOMER_LEDGER';
-
-// Column headers for auto-creation
-const CUSTOMER_HEADERS = ['ID', 'Name', 'Phone', 'Email', 'Notes', 'Total_Purchases', 'Total_Credit', 'Created_At', 'Created_By'];
-const LEDGER_HEADERS = ['ID', 'Customer_ID', 'Type', 'Amount', 'Balance', 'Reference', 'Date', 'Recorded_By'];
-
-/**
- * Ensure the Customers and Customer_Ledger tabs exist, create them if not.
- */
-async function ensureTabs() {
-    const doc = await sheets.getDocument();
-    
-    if (!doc.sheetsByTitle[CUSTOMERS_TAB]) {
-        console.log(`[Customers] Creating "${CUSTOMERS_TAB}" tab...`);
-        const sheet = await doc.addSheet({ title: CUSTOMERS_TAB });
-        await sheet.setHeaderRow(CUSTOMER_HEADERS);
-        console.log(`[Customers] "${CUSTOMERS_TAB}" tab created with headers.`);
-    }
-    
-    if (!doc.sheetsByTitle[LEDGER_TAB]) {
-        console.log(`[Customers] Creating "${LEDGER_TAB}" tab...`);
-        const sheet = await doc.addSheet({ title: LEDGER_TAB });
-        await sheet.setHeaderRow(LEDGER_HEADERS);
-        console.log(`[Customers] "${LEDGER_TAB}" tab created with headers.`);
-    }
-}
-
-// Run tab creation on module load
-ensureTabs().catch(err => console.error('[Customers] Failed to ensure tabs:', err.message));
 
 // All customer routes require authentication
 router.use(authenticateSession);
@@ -46,29 +13,33 @@ router.use(authenticateSession);
  */
 router.get('/', async (req, res) => {
     try {
-        await ensureTabs();
+        const { shop_id } = req.user;
         const { search } = req.query;
-        let customers = await sheets.getAllRows(CUSTOMERS_TAB);
-
+        
+        const where = { shop_id };
         if (search) {
-            const s = search.toLowerCase();
-            customers = customers.filter(c =>
-                (c.Name || '').toLowerCase().includes(s) ||
-                (c.Phone || '').toLowerCase().includes(s) ||
-                (c.Email || '').toLowerCase().includes(s)
-            );
+            where.OR = [
+                { name: { contains: search, mode: 'insensitive' } },
+                { phone: { contains: search, mode: 'insensitive' } },
+                { email: { contains: search, mode: 'insensitive' } }
+            ];
         }
 
+        const customers = await prisma.customer.findMany({
+            where,
+            orderBy: { name: 'asc' }
+        });
+
         const transformed = customers.map(c => ({
-            id: c.ID,
-            name: c.Name,
-            phone: c.Phone || '',
-            email: c.Email || '',
-            notes: c.Notes || '',
-            total_purchases: parseFloat(c.Total_Purchases) || 0,
-            total_credit: parseFloat(c.Total_Credit) || 0,
-            created_at: c.Created_At,
-            created_by: c.Created_By
+            id: c.uuid,
+            name: c.name,
+            phone: c.phone || '',
+            email: c.email || '',
+            notes: c.notes || '',
+            total_purchases: c.total_purchases,
+            total_credit: c.total_credit,
+            created_at: c.created_at,
+            created_by: c.created_by
         }));
 
         res.json(transformed);
@@ -84,40 +55,48 @@ router.get('/', async (req, res) => {
  */
 router.post('/', requireCounterOrAdmin, async (req, res) => {
     try {
-        await ensureTabs();
+        const { shop_id, username } = req.user;
         const { name, phone, email, notes } = req.body;
 
         if (!name || !name.trim()) {
             return res.status(400).json({ error: 'Customer name is required' });
         }
 
-        const newCustomer = {
-            ID: uuidv4(),
-            Name: name.trim(),
-            Phone: phone || '',
-            Email: email || '',
-            Notes: notes || '',
-            Total_Purchases: 0,
-            Total_Credit: 0,
-            Created_At: new Date().toISOString(),
-            Created_By: req.user.username
-        };
+        // Validate uniqueness if phone is provided
+        if (phone) {
+            const existing = await prisma.customer.findFirst({
+                where: { shop_id, phone }
+            });
+            if (existing) {
+                return res.status(400).json({ error: 'A customer with this phone number already exists in this shop.' });
+            }
+        }
 
-        await sheets.addRow(CUSTOMERS_TAB, newCustomer);
+        const newCustomer = await prisma.customer.create({
+            data: {
+                shop_id,
+                name: name.trim(),
+                phone: phone || null,
+                email: email || null,
+                notes: notes || null,
+                total_purchases: 0,
+                total_credit: 0,
+                created_by: username
+            }
+        });
 
-        // Audit log
-        await logAudit(req.user.username, 'CUSTOMER_CREATE', 'CUSTOMER', newCustomer.ID, null, { name, phone }, req);
+        await logAudit(shop_id, username, 'CUSTOMER_CREATE', 'CUSTOMER', newCustomer.uuid, null, { name, phone }, req);
 
         res.status(201).json({
-            id: newCustomer.ID,
-            name: newCustomer.Name,
-            phone: newCustomer.Phone,
-            email: newCustomer.Email,
-            notes: newCustomer.Notes,
+            id: newCustomer.uuid,
+            name: newCustomer.name,
+            phone: newCustomer.phone || '',
+            email: newCustomer.email || '',
+            notes: newCustomer.notes || '',
             total_purchases: 0,
             total_credit: 0,
-            created_at: newCustomer.Created_At,
-            created_by: newCustomer.Created_By
+            created_at: newCustomer.created_at,
+            created_by: newCustomer.created_by
         });
     } catch (error) {
         console.error('Create customer error:', error);
@@ -131,17 +110,30 @@ router.post('/', requireCounterOrAdmin, async (req, res) => {
  */
 router.put('/:id', requireCounterOrAdmin, async (req, res) => {
     try {
-        await ensureTabs();
+        const { shop_id, username } = req.user;
         const { id } = req.params;
         const { name, phone, email, notes } = req.body;
 
-        const updates = {};
-        if (name !== undefined) updates.Name = name.trim();
-        if (phone !== undefined) updates.Phone = phone;
-        if (email !== undefined) updates.Email = email;
-        if (notes !== undefined) updates.Notes = notes;
+        const currentCustomer = await prisma.customer.findFirst({
+            where: { uuid: id, shop_id }
+        });
 
-        await sheets.updateRow(CUSTOMERS_TAB, { ID: id }, updates);
+        if (!currentCustomer) {
+            return res.status(404).json({ error: 'Customer not found' });
+        }
+
+        const data = {};
+        if (name !== undefined) data.name = name.trim();
+        if (phone !== undefined) data.phone = phone;
+        if (email !== undefined) data.email = email;
+        if (notes !== undefined) data.notes = notes;
+
+        const updated = await prisma.customer.update({
+            where: { uuid: id },
+            data
+        });
+
+        await logAudit(shop_id, username, 'CUSTOMER_UPDATE', 'CUSTOMER', id, currentCustomer, updated, req);
 
         res.json({ success: true, id });
     } catch (error) {
@@ -156,23 +148,23 @@ router.put('/:id', requireCounterOrAdmin, async (req, res) => {
  */
 router.get('/:id/ledger', async (req, res) => {
     try {
-        await ensureTabs();
+        const { shop_id } = req.user;
         const { id } = req.params;
-        let entries = await sheets.getAllRows(LEDGER_TAB);
-        entries = entries.filter(e => e.Customer_ID === id);
-
-        // Sort by date descending
-        entries.sort((a, b) => new Date(b.Date) - new Date(a.Date));
+        
+        const entries = await prisma.customerLedger.findMany({
+            where: { customer_id: id, shop_id },
+            orderBy: { date: 'desc' }
+        });
 
         const transformed = entries.map(e => ({
-            id: e.ID,
-            customer_id: e.Customer_ID,
-            type: e.Type,
-            amount: parseFloat(e.Amount) || 0,
-            balance: parseFloat(e.Balance) || 0,
-            reference: e.Reference || '',
-            date: e.Date,
-            recorded_by: e.Recorded_By
+            id: e.uuid,
+            customer_id: e.customer_id,
+            type: e.type,
+            amount: e.amount,
+            balance: e.balance,
+            reference: e.reference || '',
+            date: e.date,
+            recorded_by: e.recorded_by
         }));
 
         res.json(transformed);
@@ -188,7 +180,7 @@ router.get('/:id/ledger', async (req, res) => {
  */
 router.post('/:id/payment', requireCounterOrAdmin, async (req, res) => {
     try {
-        await ensureTabs();
+        const { shop_id, username } = req.user;
         const { id } = req.params;
         const { amount, reference } = req.body;
 
@@ -196,47 +188,56 @@ router.post('/:id/payment', requireCounterOrAdmin, async (req, res) => {
             return res.status(400).json({ error: 'Valid payment amount is required' });
         }
 
-        // Get customer
-        const customer = await sheets.findRow(CUSTOMERS_TAB, { ID: id });
-        if (!customer) {
-            return res.status(404).json({ error: 'Customer not found' });
-        }
+        const result = await prisma.$transaction(async (tx) => {
+            const customer = await tx.customer.findFirst({
+                where: { uuid: id, shop_id }
+            });
+            
+            if (!customer) throw new Error('Customer not found');
 
-        const currentCredit = parseFloat(customer.Total_Credit) || 0;
-        const newCredit = Math.max(0, currentCredit - amount);
+            const currentCredit = customer.total_credit;
+            const newCredit = Math.max(0, currentCredit - amount);
 
-        // Create ledger entry
-        const ledgerEntry = {
-            ID: uuidv4(),
-            Customer_ID: id,
-            Type: 'payment',
-            Amount: amount,
-            Balance: newCredit,
-            Reference: reference || '',
-            Date: new Date().toISOString(),
-            Recorded_By: req.user.username
-        };
+            const ledgerEntry = await tx.customerLedger.create({
+                data: {
+                    shop_id,
+                    customer_id: id,
+                    type: 'payment',
+                    amount: amount,
+                    balance: newCredit,
+                    reference: reference || '',
+                    recorded_by: username
+                }
+            });
 
-        await sheets.addRow(LEDGER_TAB, ledgerEntry);
+            await tx.customer.update({
+                where: { uuid: id },
+                data: { total_credit: newCredit }
+            });
 
-        // Update customer credit balance
-        await sheets.updateRow(CUSTOMERS_TAB, { ID: id }, {
-            Total_Credit: newCredit
+            await tx.auditLog.create({
+                data: {
+                    shop_id,
+                    user: username,
+                    action: 'CUSTOMER_PAYMENT',
+                    details: JSON.stringify({ entityType: 'CUSTOMER', entityId: id, oldValue: { credit: currentCredit }, newValue: { payment: amount, new_credit: newCredit } }),
+                    ip_address: req.ip || 'unknown'
+                }
+            });
+
+            return { previous_credit: currentCredit, new_credit: newCredit, ledger_entry_id: ledgerEntry.uuid };
         });
-
-        // Audit
-        await logAudit(req.user.username, 'CUSTOMER_PAYMENT', 'CUSTOMER', id, { credit: currentCredit }, { payment: amount, new_credit: newCredit }, req);
 
         res.json({
             success: true,
-            previous_credit: currentCredit,
+            previous_credit: result.previous_credit,
             payment: amount,
-            new_credit: newCredit,
-            ledger_entry_id: ledgerEntry.ID
+            new_credit: result.new_credit,
+            ledger_entry_id: result.ledger_entry_id
         });
     } catch (error) {
         console.error('Record payment error:', error);
-        res.status(500).json({ error: 'Failed to record payment' });
+        res.status(error.message === 'Customer not found' ? 404 : 500).json({ error: error.message || 'Failed to record payment' });
     }
 });
 
@@ -246,7 +247,7 @@ router.post('/:id/payment', requireCounterOrAdmin, async (req, res) => {
  */
 router.post('/:id/credit', requireCounterOrAdmin, async (req, res) => {
     try {
-        await ensureTabs();
+        const { shop_id, username } = req.user;
         const { id } = req.params;
         const { amount, reference } = req.body;
 
@@ -254,60 +255,62 @@ router.post('/:id/credit', requireCounterOrAdmin, async (req, res) => {
             return res.status(400).json({ error: 'Valid credit amount is required' });
         }
 
-        const customer = await sheets.findRow(CUSTOMERS_TAB, { ID: id });
-        if (!customer) {
-            return res.status(404).json({ error: 'Customer not found' });
-        }
+        const result = await prisma.$transaction(async (tx) => {
+            const customer = await tx.customer.findFirst({
+                where: { uuid: id, shop_id }
+            });
+            
+            if (!customer) throw new Error('Customer not found');
 
-        const currentCredit = parseFloat(customer.Total_Credit) || 0;
-        const currentPurchases = parseFloat(customer.Total_Purchases) || 0;
-        const newCredit = currentCredit + amount;
+            const currentCredit = customer.total_credit;
+            const currentPurchases = customer.total_purchases;
+            const newCredit = currentCredit + amount;
 
-        const ledgerEntry = {
-            ID: uuidv4(),
-            Customer_ID: id,
-            Type: 'credit',
-            Amount: amount,
-            Balance: newCredit,
-            Reference: reference || '',
-            Date: new Date().toISOString(),
-            Recorded_By: req.user.username
-        };
+            const ledgerEntry = await tx.customerLedger.create({
+                data: {
+                    shop_id,
+                    customer_id: id,
+                    type: 'credit',
+                    amount: amount,
+                    balance: newCredit,
+                    reference: reference || '',
+                    recorded_by: username
+                }
+            });
 
-        await sheets.addRow(LEDGER_TAB, ledgerEntry);
+            await tx.customer.update({
+                where: { uuid: id },
+                data: {
+                    total_credit: newCredit,
+                    total_purchases: currentPurchases + amount
+                }
+            });
 
-        await sheets.updateRow(CUSTOMERS_TAB, { ID: id }, {
-            Total_Credit: newCredit,
-            Total_Purchases: currentPurchases + amount
+            return { new_credit: newCredit, ledger_entry_id: ledgerEntry.uuid };
         });
 
         res.json({
             success: true,
-            new_credit: newCredit,
-            ledger_entry_id: ledgerEntry.ID
+            new_credit: result.new_credit,
+            ledger_entry_id: result.ledger_entry_id
         });
     } catch (error) {
         console.error('Add credit error:', error);
-        res.status(500).json({ error: 'Failed to add credit' });
+        res.status(error.message === 'Customer not found' ? 404 : 500).json({ error: error.message || 'Failed to add credit' });
     }
 });
 
-/**
- * Helper: Log to audit trail
- */
-async function logAudit(user, action, entityType, entityId, oldValue, newValue, req) {
+async function logAudit(shop_id, user, action, entityType, entityId, oldValue, newValue, req) {
     try {
-        const TABS = sheets.TABS;
-        await sheets.addRow(TABS.AUDIT_LOG, {
-            Timestamp: new Date().toISOString(),
-            User: user,
-            Action: action,
-            Entity_Type: entityType,
-            Entity_ID: entityId,
-            Old_Value: oldValue ? JSON.stringify(oldValue) : '',
-            New_Value: newValue ? JSON.stringify(newValue) : '',
-            IP_Address: req?.ip || '',
-            Device_Info: (req?.headers?.['user-agent'] || '').substring(0, 200)
+        const ipAddress = req?.ip || req?.headers?.['x-forwarded-for'] || 'unknown';
+        await prisma.auditLog.create({
+            data: {
+                shop_id,
+                user: user || 'anonymous',
+                action,
+                details: JSON.stringify({ entityType, entityId, oldValue, newValue }),
+                ip_address: ipAddress
+            }
         });
     } catch (error) {
         console.error('Audit log error:', error);

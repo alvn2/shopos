@@ -1,12 +1,10 @@
 const express = require('express');
 const { v4: uuidv4 } = require('uuid');
-const sheets = require('../services/sheets');
+const { prisma } = require('../services/prisma');
 const { authenticateSession } = require('../middleware/auth');
 const { validate } = require('../middleware/validation');
-const { addSaleToQueue } = require('../services/queueService');
 
 const router = express.Router();
-const TABS = sheets.TABS;
 
 router.use(authenticateSession);
 
@@ -16,46 +14,84 @@ router.use(authenticateSession);
  */
 router.post('/', async (req, res) => {
     try {
-        const { batch_id, date, items, total_kes, payment_method, customer_name, notes } = req.body;
+        const { shop_id, username } = req.user;
+        const { batch_id, date, items, total_kes, total_price, payment_method, customer_name, notes } = req.body;
 
         if (!batch_id) {
             return res.status(400).json({ error: 'Receipt number (batch_id) is required' });
         }
 
-        // Check for duplicate receipt number
-        const existingSale = await sheets.findRow(TABS.SALES, { Batch_ID: batch_id });
+        const saleTotal = total_price !== undefined ? total_price : (total_kes || 0);
+
+        // Check for duplicate receipt number for this shop
+        const existingSale = await prisma.sale.findFirst({
+            where: { batch_id, shop_id }
+        });
+
         if (existingSale) {
             return res.status(409).json({ error: 'Receipt number already exists' });
         }
 
-        const saleDate = date || new Date().toISOString();
+        const saleDate = date ? new Date(date) : new Date();
 
-        // Create sale record
-        const saleRecord = {
-            Date: saleDate,
-            Batch_ID: batch_id,
-            Items_JSON: JSON.stringify(items || []),
-            Total_KES: total_kes || 0,
-            Payment_Method: payment_method || 'Cash',
-            Customer_Name: customer_name || '',
-            Notes: notes || '',
-            Sold_By: req.user.username
-        };
+        // Use a transaction to create the sale and decrement inventory
+        await prisma.$transaction(async (tx) => {
+            // 1. Create Sale
+            const sale = await tx.sale.create({
+                data: {
+                    shop_id,
+                    batch_id,
+                    date: saleDate,
+                    items_json: JSON.stringify(items || []),
+                    total_price: saleTotal,
+                    payment_method: payment_method || 'Cash',
+                    customer_name: customer_name || '',
+                    notes: notes || '',
+                    sold_by: username
+                }
+            });
 
-        // Queue the sale for background processing to avoid Google Sheets API rate limits
-        await addSaleToQueue({
-            saleRecord,
-            itemsData: items,
-            reqInfo: {
-                ip: req.ip,
-                userAgent: req.headers['user-agent']
+            // 2. Decrement inventory
+            if (items && Array.isArray(items)) {
+                for (const item of items) {
+                    if (item.uuid) {
+                        // Find current item
+                        const invItem = await tx.inventoryItem.findFirst({
+                            where: { uuid: item.uuid, shop_id }
+                        });
+
+                        if (invItem) {
+                            const qtySold = parseInt(item.qty) || 1;
+                            const newStock = Math.max(0, invItem.stock_qty - qtySold);
+                            
+                            await tx.inventoryItem.update({
+                                where: { uuid: invItem.uuid },
+                                data: {
+                                    stock_qty: newStock,
+                                    updated_by: username
+                                }
+                            });
+                        }
+                    }
+                }
             }
+
+            // 3. Audit log
+            await tx.auditLog.create({
+                data: {
+                    shop_id,
+                    user: username,
+                    action: 'SALE_CREATE',
+                    details: JSON.stringify({ batch_id, total: saleTotal, items_count: items ? items.length : 0 }),
+                    ip_address: req.ip || 'unknown'
+                }
+            });
         });
 
         res.status(201).json({
             message: 'Sale recorded successfully',
             batch_id: batch_id,
-            total: total_kes
+            total: saleTotal
         });
     } catch (error) {
         console.error('Create sale error:', error);
@@ -69,48 +105,48 @@ router.post('/', async (req, res) => {
  */
 router.get('/', async (req, res) => {
     try {
+        const { shop_id } = req.user;
         const { from, to, payment_method, page, limit } = req.query;
         const pageNum = parseInt(page) || 1;
         const limitNum = parseInt(limit) || 0; // 0 means no pagination
 
-        let sales = await sheets.getAllRows(TABS.SALES);
+        const where = { shop_id };
 
-        // Filter by date range
-        if (from) {
-            const fromDate = new Date(from);
-            sales = sales.filter(s => new Date(s.Date) >= fromDate);
-        }
-        if (to) {
-            const toDate = new Date(to);
-            sales = sales.filter(s => new Date(s.Date) <= toDate);
+        if (from || to) {
+            where.date = {};
+            if (from) where.date.gte = new Date(from);
+            if (to) where.date.lte = new Date(to);
         }
 
-        // Filter by payment method
         if (payment_method && payment_method !== 'All') {
-            sales = sales.filter(s => s.Payment_Method === payment_method);
+            where.payment_method = payment_method;
         }
 
-        // Sort by date descending (most recent first)
-        sales.sort((a, b) => new Date(b.Date) - new Date(a.Date));
+        const queryOpts = {
+            where,
+            orderBy: { date: 'desc' }
+        };
 
-        const total = sales.length;
+        const total = await prisma.sale.count({ where });
 
-        // Pagination
         if (limitNum > 0) {
-            const offset = (pageNum - 1) * limitNum;
-            sales = sales.slice(offset, offset + limitNum);
+            queryOpts.skip = (pageNum - 1) * limitNum;
+            queryOpts.take = limitNum;
         }
+
+        const sales = await prisma.sale.findMany(queryOpts);
 
         // Transform for frontend
         const transformed = sales.map(s => ({
-            date: s.Date,
-            batch_id: s.Batch_ID,
-            items: JSON.parse(s.Items_JSON || '[]'),
-            total_kes: parseFloat(s.Total_KES) || 0,
-            payment_method: s.Payment_Method,
-            customer_name: s.Customer_Name,
-            notes: s.Notes,
-            sold_by: s.Sold_By
+            date: s.date.toISOString(),
+            batch_id: s.batch_id,
+            items: JSON.parse(s.items_json || '[]'),
+            total_kes: s.total_price,
+            total_price: s.total_price,
+            payment_method: s.payment_method,
+            customer_name: s.customer_name,
+            notes: s.notes,
+            sold_by: s.sold_by
         }));
 
         // Return paginated or full response
@@ -130,26 +166,5 @@ router.get('/', async (req, res) => {
         res.status(500).json({ error: 'Failed to fetch sales' });
     }
 });
-
-/**
- * Helper: Log to audit trail
- */
-async function logAudit(user, action, entityType, entityId, oldValue, newValue, req) {
-    try {
-        await sheets.addRow(TABS.AUDIT_LOG, {
-            Timestamp: new Date().toISOString(),
-            User: user,
-            Action: action,
-            Entity_Type: entityType,
-            Entity_ID: entityId,
-            Old_Value: oldValue ? JSON.stringify(oldValue) : '',
-            New_Value: newValue ? JSON.stringify(newValue) : '',
-            IP_Address: req?.ip || '',
-            Device_Info: (req?.headers?.['user-agent'] || '').substring(0, 200)
-        });
-    } catch (error) {
-        console.error('Audit log error:', error);
-    }
-}
 
 module.exports = router;

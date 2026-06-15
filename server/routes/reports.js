@@ -1,9 +1,8 @@
 const express = require('express');
-const sheets = require('../services/sheets');
+const { prisma } = require('../services/prisma');
 const { authenticateSession, requireAdmin } = require('../middleware/auth');
 
 const router = express.Router();
-const TABS = sheets.TABS;
 
 router.use(authenticateSession);
 
@@ -13,66 +12,60 @@ router.use(authenticateSession);
  */
 router.get('/sales-summary', async (req, res) => {
     try {
+        const { shop_id } = req.user;
         const { from, to } = req.query;
-
-        let sales = await sheets.getAllRows(TABS.SALES);
 
         // Default to last 30 days if no date range
         const now = new Date();
         const fromDate = from ? new Date(from) : new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
         const toDate = to ? new Date(to) : now;
 
-        sales = sales.filter(s => {
-            const saleDate = new Date(s.Date);
-            return saleDate >= fromDate && saleDate <= toDate;
+        const sales = await prisma.sale.findMany({
+            where: {
+                shop_id,
+                date: { gte: fromDate, lte: toDate }
+            }
         });
 
-        // Calculate metrics
-        const totalSales = sales.reduce((sum, s) => sum + (parseFloat(s.Total_KES) || 0), 0);
+        const totalSales = sales.reduce((sum, s) => sum + s.total_price, 0);
         const totalTransactions = sales.length;
         const averageTransaction = totalTransactions > 0 ? totalSales / totalTransactions : 0;
 
-        // Payment method breakdown
         const paymentMethods = {};
         sales.forEach(s => {
-            const method = s.Payment_Method || 'Cash';
+            const method = s.payment_method || 'Cash';
             paymentMethods[method] = (paymentMethods[method] || 0) + 1;
         });
 
-        // Convert to percentages
         const paymentMethodPercents = {};
         Object.keys(paymentMethods).forEach(method => {
             paymentMethodPercents[method] = Math.round((paymentMethods[method] / totalTransactions) * 100);
         });
 
-        // Chart data - group by date
         const chartData = {};
         sales.forEach(s => {
-            const date = s.Date.split('T')[0]; // Get just the date part
-            if (!chartData[date]) {
-                chartData[date] = 0;
+            const dateStr = s.date.toISOString().split('T')[0];
+            if (!chartData[dateStr]) {
+                chartData[dateStr] = 0;
             }
-            chartData[date] += parseFloat(s.Total_KES) || 0;
+            chartData[dateStr] += s.total_price;
         });
 
         const chartArray = Object.keys(chartData)
             .sort()
-            .map(date => ({
-                date,
-                sales: chartData[date]
-            }));
+            .map(date => ({ date, sales: chartData[date] }));
 
-        // Calculate growth vs previous period
         const periodDays = Math.ceil((toDate - fromDate) / (24 * 60 * 60 * 1000));
         const prevFromDate = new Date(fromDate.getTime() - periodDays * 24 * 60 * 60 * 1000);
 
-        const allSales = await sheets.getAllRows(TABS.SALES);
-        const prevSales = allSales.filter(s => {
-            const saleDate = new Date(s.Date);
-            return saleDate >= prevFromDate && saleDate < fromDate;
+        const prevSales = await prisma.sale.findMany({
+            where: {
+                shop_id,
+                date: { gte: prevFromDate, lt: fromDate }
+            }
         });
-        const prevTotal = prevSales.reduce((sum, s) => sum + (parseFloat(s.Total_KES) || 0), 0);
-
+        
+        const prevTotal = prevSales.reduce((sum, s) => sum + s.total_price, 0);
         const growthPercent = prevTotal > 0 ? ((totalSales - prevTotal) / prevTotal) * 100 : 0;
 
         res.json({
@@ -97,27 +90,26 @@ router.get('/sales-summary', async (req, res) => {
  */
 router.get('/inventory-health', async (req, res) => {
     try {
-        const inventory = await sheets.getAllRows(TABS.INVENTORY);
+        const { shop_id } = req.user;
+        const inventory = await prisma.inventoryItem.findMany({
+            where: { shop_id, is_deleted: false }
+        });
 
-        // Calculate counts
         let inStock = 0;
         let lowStock = 0;
         let outOfStock = 0;
         const outOfStockItems = [];
 
         inventory.forEach(item => {
-            const stockQty = parseInt(item.Stock_Qty) || 0;
-            const minStock = parseInt(item.Min_Stock) || 5;
-
-            if (stockQty === 0) {
+            if (item.stock_qty <= 0) {
                 outOfStock++;
                 outOfStockItems.push({
-                    uuid: item.UUID,
-                    part_number: item.Part_Number,
-                    name: item.Name,
-                    last_updated: item.Last_Updated
+                    uuid: item.uuid,
+                    part_number: item.part_number,
+                    name: item.name,
+                    last_updated: item.updated_at
                 });
-            } else if (stockQty <= minStock) {
+            } else if (item.stock_qty <= item.min_stock) {
                 lowStock++;
             } else {
                 inStock++;
@@ -145,26 +137,22 @@ router.get('/inventory-health', async (req, res) => {
  */
 router.get('/top-products', async (req, res) => {
     try {
+        const { shop_id } = req.user;
         const { from, to, limit = 20 } = req.query;
 
-        let sales = await sheets.getAllRows(TABS.SALES);
-        const inventory = await sheets.getAllRows(TABS.INVENTORY);
-
-        // Filter by date
-        if (from) {
-            const fromDate = new Date(from);
-            sales = sales.filter(s => new Date(s.Date) >= fromDate);
-        }
-        if (to) {
-            const toDate = new Date(to);
-            sales = sales.filter(s => new Date(s.Date) <= toDate);
+        const where = { shop_id };
+        if (from || to) {
+            where.date = {};
+            if (from) where.date.gte = new Date(from);
+            if (to) where.date.lte = new Date(to);
         }
 
-        // Aggregate by product
+        const sales = await prisma.sale.findMany({ where });
+
         const productStats = {};
 
         sales.forEach(sale => {
-            const items = JSON.parse(sale.Items_JSON || '[]');
+            const items = JSON.parse(sale.items_json || '[]');
             items.forEach(item => {
                 if (!productStats[item.uuid]) {
                     productStats[item.uuid] = {
@@ -180,16 +168,10 @@ router.get('/top-products', async (req, res) => {
             });
         });
 
-        // Convert to array and sort
         let products = Object.values(productStats);
         products.sort((a, b) => b.qty_sold - a.qty_sold);
         products = products.slice(0, parseInt(limit));
-
-        // Add rank
-        products = products.map((p, index) => ({
-            rank: index + 1,
-            ...p
-        }));
+        products = products.map((p, index) => ({ rank: index + 1, ...p }));
 
         res.json({ products });
     } catch (error) {
@@ -204,47 +186,45 @@ router.get('/top-products', async (req, res) => {
  */
 router.get('/profit-analysis', requireAdmin, async (req, res) => {
     try {
+        const { shop_id } = req.user;
         const { from, to } = req.query;
 
-        let sales = await sheets.getAllRows(TABS.SALES);
-        const inventory = await sheets.getAllRows(TABS.INVENTORY);
-        const settingsRows = await sheets.getAllRows(TABS.SETTINGS);
-
-        // Get settings
+        // Get settings for AED rate and overhead factor
+        const settingsRecords = await prisma.setting.findMany({ where: { shop_id } });
         const settings = {};
-        settingsRows.forEach(s => {
-            settings[s.Key] = s.Value;
-        });
+        settingsRecords.forEach(s => settings[s.key] = s.value);
+        
         const aedRate = parseFloat(settings.aed_exchange_rate) || 36.50;
         const overheadFactor = parseFloat(settings.overhead_factor) || 1.35;
 
-        // Create inventory lookup
+        // Get inventory for cost basis
+        const inventory = await prisma.inventoryItem.findMany({ where: { shop_id } });
         const inventoryMap = {};
         inventory.forEach(item => {
-            inventoryMap[item.UUID] = {
-                aed_buying_price: parseFloat(item.AED_Buying_Price) || 0,
-                selling_price: parseFloat(item.Selling_Price) || 0
+            inventoryMap[item.uuid] = {
+                aed_buying_price: item.aed_buying_price || 0,
+                selling_price: item.selling_price || 0
             };
         });
 
-        // Filter by date
         const now = new Date();
         const fromDate = from ? new Date(from) : new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
         const toDate = to ? new Date(to) : now;
 
-        sales = sales.filter(s => {
-            const saleDate = new Date(s.Date);
-            return saleDate >= fromDate && saleDate <= toDate;
+        const sales = await prisma.sale.findMany({
+            where: {
+                shop_id,
+                date: { gte: fromDate, lte: toDate }
+            }
         });
 
-        // Calculate profit
         let totalRevenue = 0;
         let totalProfit = 0;
 
         sales.forEach(sale => {
-            totalRevenue += parseFloat(sale.Total_KES) || 0;
+            totalRevenue += sale.total_price;
 
-            const items = JSON.parse(sale.Items_JSON || '[]');
+            const items = JSON.parse(sale.items_json || '[]');
             items.forEach(item => {
                 const invItem = inventoryMap[item.uuid];
                 if (invItem) {
@@ -258,17 +238,16 @@ router.get('/profit-analysis', requireAdmin, async (req, res) => {
         const totalCogs = totalRevenue - totalProfit;
         const averageMargin = totalRevenue > 0 ? (totalProfit / totalRevenue) * 100 : 0;
 
-        // Find loss-making items
         const lossMakingItems = [];
         inventory.forEach(item => {
-            const aedCost = parseFloat(item.AED_Buying_Price) || 0;
-            const sellingPrice = parseFloat(item.Selling_Price) || 0;
+            const aedCost = item.aed_buying_price || 0;
+            const sellingPrice = item.selling_price || 0;
             const landedCost = aedCost * aedRate * overheadFactor;
 
             if (sellingPrice < landedCost && sellingPrice > 0) {
                 lossMakingItems.push({
-                    name: item.Name,
-                    part_number: item.Part_Number,
+                    name: item.name,
+                    part_number: item.part_number,
                     selling_price: sellingPrice,
                     landed_cost: Math.round(landedCost * 100) / 100,
                     loss_per_unit: Math.round((sellingPrice - landedCost) * 100) / 100

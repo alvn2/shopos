@@ -1,9 +1,9 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { User, AuthState, LoginResponse, Session } from '../types';
-import { api, storage } from '../services/api';
+import { api } from '../services/api';
 
 interface AuthContextType extends AuthState {
-  login: (username: string, password: string, device_info: string) => Promise<void>;
+  login: (shop_id: string, username: string, password: string, device_info: string) => Promise<void>;
   logout: () => Promise<void>;
   logoutAll: () => Promise<number>;
   getSessions: () => Promise<Session[]>;
@@ -21,8 +21,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   useEffect(() => {
     const initAuth = async () => {
-      const storedSessionId = storage.getItem('shopos_session');
-      const storedUser = storage.getItem('shopos_user');
+      const storedSessionId = localStorage.getItem('shopos_session');
+      const storedUser = localStorage.getItem('shopos_user');
 
       if (storedSessionId && storedUser) {
         // Optimistic Load
@@ -54,15 +54,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   const handleLocalLogout = () => {
-    storage.removeItem('shopos_session');
-    storage.removeItem('shopos_user');
+    localStorage.removeItem('shopos_session');
+    localStorage.removeItem('shopos_user');
     setState({ user: null, session_id: null, isAuthenticated: false });
   };
 
-  const login = async (username: string, password: string, device_info: string) => {
-    const response: LoginResponse = await api.auth.login(username, password, device_info);
-    storage.setItem('shopos_session', response.session_id);
-    storage.setItem('shopos_user', JSON.stringify(response.user));
+  const login = async (shop_id: string, username: string, password: string, device_info: string) => {
+    const response: LoginResponse = await api.auth.login(shop_id, username, password, device_info);
+    localStorage.setItem('shopos_session', response.session_id);
+    localStorage.setItem('shopos_user', JSON.stringify(response.user));
     setState({
       session_id: response.session_id,
       user: response.user,

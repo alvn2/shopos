@@ -1,46 +1,50 @@
 const { v4: uuidv4 } = require('uuid');
-const sheets = require('./sheets');
-
-const TABS = sheets.TABS;
+const { prisma } = require('./prisma');
 
 /**
  * Create a new session for a user
  */
-const sessionCache = new Map(); // sessionId -> sessionData
-
-/**
- * Create a new session for a user
- */
-async function createSession(username, deviceInfo, ipAddress) {
-    const sessionId = `sess_${uuidv4()}`;
+async function createSession(shop_id, username, deviceInfo, ipAddress) {
+    const sessionId = uuidv4();
     const now = new Date();
     const expiresAt = new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000); // 14 days
 
-    const sessionData = {
-        Session_ID: sessionId,
-        Username: username,
-        Device_Info: deviceInfo,
-        IP_Address: ipAddress,
-        Created_At: now.toISOString(),
-        Last_Active: now.toISOString(),
-        Expires_At: expiresAt.toISOString()
-    };
+    // Find the user first to link the session
+    const user = await prisma.user.findUnique({
+        where: { shop_id_username: { shop_id, username } }
+    });
 
-    // Cache immediately
-    sessionCache.set(sessionId, sessionData);
+    if (!user) {
+        throw new Error("User not found");
+    }
 
     // Enforce max 5 sessions per user
-    const allSessions = await sheets.getAllRows(TABS.SESSIONS);
-    const userSessions = allSessions.filter(s => s.Username === username);
+    const userSessions = await prisma.session.findMany({
+        where: { user_uuid: user.uuid },
+        orderBy: { created_at: 'asc' }
+    });
 
     if (userSessions.length >= 5) {
         // Delete oldest session
-        userSessions.sort((a, b) => new Date(a.Created_At) - new Date(b.Created_At));
-        await deleteSession(userSessions[0].Session_ID);
+        await prisma.session.delete({
+            where: { session_id: userSessions[0].session_id }
+        });
     }
 
-    await sheets.addRow(TABS.SESSIONS, sessionData);
-    return sessionId;
+    const session = await prisma.session.create({
+        data: {
+            session_id: sessionId,
+            shop_id: shop_id,
+            user_uuid: user.uuid,
+            device_info: deviceInfo || 'Unknown',
+            ip_address: ipAddress || 'unknown',
+            created_at: now,
+            last_active: now,
+            expires_at: expiresAt
+        }
+    });
+
+    return session.session_id;
 }
 
 /**
@@ -49,55 +53,45 @@ async function createSession(username, deviceInfo, ipAddress) {
 async function validateSession(sessionId) {
     if (!sessionId) return null;
 
-    let session = sessionCache.get(sessionId);
-
-    // If not in cache, try Sheets
-    if (!session) {
-        session = await sheets.findRow(TABS.SESSIONS, { Session_ID: sessionId });
-        if (session) {
-            sessionCache.set(sessionId, session);
-        }
-    }
+    const session = await prisma.session.findUnique({
+        where: { session_id: sessionId },
+        include: { user: true }
+    });
 
     if (!session) return null;
 
     const now = new Date();
-    const expiresAt = new Date(session.Expires_At);
 
     // Check if expired
-    if (now > expiresAt) {
+    if (now > session.expires_at) {
         await deleteSession(sessionId);
         return null;
     }
 
+    // Check if user is active
+    if (!session.user || !session.user.is_active) {
+        return null;
+    }
+
     // Update last active if more than 1 hour old (Debounced)
-    const lastActive = new Date(session.Last_Active);
+    const lastActive = new Date(session.last_active);
     const hourAgo = new Date(now.getTime() - 60 * 60 * 1000);
 
     if (lastActive < hourAgo) {
-        session.Last_Active = now.toISOString();
-        sessionCache.set(sessionId, session); // Update cache
-
-        // Update sheets asynchronously to not block
-        sheets.updateRow(TABS.SESSIONS,
-            { Session_ID: sessionId },
-            { Last_Active: now.toISOString() }
-        ).catch(e => console.error('Failed to update session activity', e));
-    }
-
-    // Get user info (Cache this too?)
-    // For now, let's look up user from sheets to be safe about Role changes
-    const user = await sheets.findRow(TABS.USERS, { Username: session.Username });
-    if (!user || user.Is_Active !== 'TRUE') {
-        return null;
+        await prisma.session.update({
+            where: { session_id: sessionId },
+            data: { last_active: now }
+        }).catch(e => console.error('Failed to update session activity', e));
     }
 
     return {
         session,
         user: {
-            username: user.Username,
-            role: user.Role,
-            full_name: user.Full_Name
+            uuid: session.user.uuid,
+            username: session.user.username,
+            shop_id: session.user.shop_id,
+            role: session.user.role,
+            full_name: session.user.full_name
         }
     };
 }
@@ -106,11 +100,12 @@ async function validateSession(sessionId) {
  * Delete a specific session
  */
 async function deleteSession(sessionId) {
-    sessionCache.delete(sessionId);
     try {
-        return await sheets.deleteRow(TABS.SESSIONS, { Session_ID: sessionId });
+        await prisma.session.delete({
+            where: { session_id: sessionId }
+        });
+        return true;
     } catch (e) {
-        // Ignore if already deleted in sheets
         return false;
     }
 }
@@ -118,73 +113,56 @@ async function deleteSession(sessionId) {
 /**
  * Delete all sessions for a user
  */
-async function deleteAllUserSessions(username) {
-    const allSessions = await sheets.getAllRows(TABS.SESSIONS);
-    const userSessions = allSessions.filter(s => s.Username === username);
-
-    // Clear from cache
-    for (const [sid, session] of sessionCache.entries()) {
-        if (session.Username === username) {
-            sessionCache.delete(sid);
-        }
+async function deleteAllUserSessions(user_uuid) {
+    try {
+        const result = await prisma.session.deleteMany({
+            where: { user_uuid: user_uuid }
+        });
+        return result.count;
+    } catch (e) {
+        return 0;
     }
-
-    for (const session of userSessions) {
-        try {
-            await sheets.deleteRow(TABS.SESSIONS, { Session_ID: session.Session_ID });
-        } catch (e) { /* ignore */ }
-    }
-
-    return userSessions.length;
 }
 
 /**
  * Get all sessions for a user
  */
-async function getUserSessions(username) {
-    // Always fetch from source of truth for listing
-    const allSessions = await sheets.getAllRows(TABS.SESSIONS);
-
-    // Refresh cache with fresh data (optional strategy)
-    allSessions.forEach(s => {
-        sessionCache.set(s.Session_ID, s);
-    });
-
+async function getUserSessions(user_uuid) {
     const now = new Date();
 
-    return allSessions
-        .filter(s => s.Username === username && new Date(s.Expires_At) > now)
-        .sort((a, b) => new Date(b.Last_Active) - new Date(a.Last_Active))
-        .map(s => ({
-            session_id: s.Session_ID,
-            device_info: s.Device_Info,
-            ip_address: s.IP_Address,
-            created_at: s.Created_At,
-            last_active: s.Last_Active,
-            expires_at: s.Expires_At
-        }));
+    const sessions = await prisma.session.findMany({
+        where: {
+            user_uuid: user_uuid,
+            expires_at: { gt: now }
+        },
+        orderBy: { last_active: 'desc' }
+    });
+
+    return sessions.map(s => ({
+        session_id: s.session_id,
+        device_info: s.device_info,
+        ip_address: s.ip_address,
+        created_at: s.created_at,
+        last_active: s.last_active,
+        expires_at: s.expires_at
+    }));
 }
 
 /**
  * Cleanup expired sessions (called by cron job)
  */
 async function cleanupExpiredSessions() {
-    const allSessions = await sheets.getAllRows(TABS.SESSIONS);
     const now = new Date();
-
-    let count = 0;
-    for (const session of allSessions) {
-        if (new Date(session.Expires_At) < now) {
-            sessionCache.delete(session.Session_ID);
-            try {
-                await sheets.deleteRow(TABS.SESSIONS, { Session_ID: session.Session_ID });
-                count++;
-            } catch (e) { /* ignore */ }
-        }
+    try {
+        const result = await prisma.session.deleteMany({
+            where: { expires_at: { lt: now } }
+        });
+        console.log(`[Session Cleanup] Removed ${result.count} expired sessions`);
+        return result.count;
+    } catch (e) {
+        console.error('[Session Cleanup] Failed:', e);
+        return 0;
     }
-
-    console.log(`[Session Cleanup] Removed ${count} expired sessions`);
-    return count;
 }
 
 module.exports = {

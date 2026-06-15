@@ -88,8 +88,10 @@ const InventoryRow = memo<{
         {isAdmin && (
           <div className="flex items-center justify-between text-sm mb-3 pb-3 border-b border-slate-200 dark:border-slate-700/50">
             <span className="text-slate-500 dark:text-slate-400">
-              <span className="font-semibold">Buy:</span> AED {item.aed_buying_price}
-              <span className="mx-2 text-slate-300 dark:text-slate-600">→</span>
+              {showAED && item.aed_buying_price > 0 && <span>
+                <span className="font-semibold">Buy:</span> AED {item.aed_buying_price}
+                <span className="mx-2 text-slate-300 dark:text-slate-600">→</span>
+              </span>}
               <span className="text-slate-800 dark:text-slate-200 font-bold">KES {landedCostKES.toLocaleString()}</span>
             </span>
           </div>
@@ -154,6 +156,7 @@ const Inventory: React.FC = () => {
   const isAdmin = user?.role === UserRole.ADMIN;
   const isWorker = user?.role === UserRole.WORKER;
   const { items, loading, settings, refreshInventory, removeLocalItem } = useInventory();
+  const showAED = user?.shop_id !== 'CARWORLD';
 
   const [localItems, setLocalItems] = useState<InventoryItem[]>([]);
   const [modifiedIds, setModifiedIds] = useState<Set<string>>(new Set());
@@ -360,9 +363,11 @@ const Inventory: React.FC = () => {
             <div className="w-10 h-10 rounded-full bg-indigo-100 dark:bg-indigo-900/50 flex items-center justify-center shrink-0">
               <Calculator size={20} className="text-indigo-600 dark:text-indigo-400" />
             </div>
-            <span>
-              <strong>Base Exchange:</strong> AED × <span className="text-brand-600 dark:text-brand-400 font-mono font-bold">{aedRate}</span> × (1 + <span className="text-brand-600 dark:text-brand-400 font-mono font-bold">{conversionPercent}%</span>) = <strong className="text-indigo-700 dark:text-indigo-300 px-2 py-0.5 rounded-md bg-white/50 dark:bg-slate-800">{(aedRate * (1 + conversionPercent / 100)).toFixed(2)} KES/AED</strong>
-            </span>
+            {showAED && (
+              <div>
+                <strong>Base Exchange:</strong> AED × <span className="text-brand-600 dark:text-brand-400 font-mono font-bold">{aedRate}</span> × (1 + <span className="text-brand-600 dark:text-brand-400 font-mono font-bold">{conversionPercent}%</span>) = <strong className="text-indigo-700 dark:text-indigo-300 px-2 py-0.5 rounded-md bg-white/50 dark:bg-slate-800">{(aedRate * (1 + conversionPercent / 100)).toFixed(2)} KES/AED</strong>
+              </div>
+            )}
           </div>
         )}
 
@@ -451,6 +456,7 @@ const Inventory: React.FC = () => {
                   isModified={isModified}
                   isAdmin={isAdmin}
                   isWorker={isWorker}
+                  showAED={showAED}
                   landedCostKES={landedCostKES}
                   profitMargin={profitMargin}
                   onAdjust={handleAdjust}
@@ -551,13 +557,16 @@ const Inventory: React.FC = () => {
                   Pricing Calculator
                 </div>
 
+                {showAED && (
                 <div className="space-y-1.5">
                   <label className="block text-xs text-slate-500">Buying Price (AED)</label>
                   <input type="number" step="0.01" value={editForm.aed_buying_price} onChange={e => setEditForm({ ...editForm, aed_buying_price: e.target.value })} className="input-modern" />
                 </div>
+                )}
                 <div className="space-y-1.5">
                   <label className="block text-xs text-slate-500">Buying Price (KSH) — Optional</label>
                   <input type="number" step="1" value={editForm.ksh_buying_price} onChange={e => setEditForm({ ...editForm, ksh_buying_price: e.target.value })} className="input-modern" />
+                  {showAED && <div className="text-xs text-blue-500 mt-1">= AED {editForm.aed_buying_price || 0} × {aedRate} × (1 + {conversionPercent}%)</div>}
                 </div>
 
                 {/* Landed Cost Display */}

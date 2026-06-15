@@ -22,6 +22,7 @@ interface SaleLineItem {
 const RecordSale: React.FC = () => {
   const { items, refreshInventory } = useInventory();
   const { user } = useAuth();
+  const showAED = user?.shop_id !== 'CARWORLD';
   const isAdmin = user?.role === UserRole.ADMIN;
 
   // Form State
@@ -426,7 +427,7 @@ const RecordSale: React.FC = () => {
                         <div className="font-bold text-sm text-slate-900 dark:text-white mb-1 leading-tight pr-6">{item.name}</div>
                         <div className="flex items-center gap-2 mb-2">
                           <div className="text-xs text-slate-500 font-mono font-bold bg-slate-100 dark:bg-slate-900 px-2 py-0.5 rounded border border-slate-200 dark:border-slate-700">{item.part_number}</div>
-                          {isAdmin && <div className="text-xs text-slate-400 font-medium">Buy: AED {item.buying_price_aed}</div>}
+                          {isAdmin && showAED && <div className="text-xs text-slate-400 font-medium">Buy: AED {item.buying_price_aed}</div>}
                         </div>
                       </div>
 

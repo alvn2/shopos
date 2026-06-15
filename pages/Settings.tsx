@@ -9,8 +9,9 @@ import { Toaster, toast } from 'react-hot-toast';
 type TabType = 'rates' | 'users' | 'system';
 
 const SettingsPage: React.FC = () => {
-  const { user } = useAuth();
-  const [activeTab, setActiveTab] = useState<TabType>('rates');
+  const { isAdmin, user } = useAuth();
+  const showAED = user?.shop_id !== 'CARWORLD';
+  const [activeTab, setActiveTab] = useState<TabType>(user?.shop_id === 'CARWORLD' ? 'users' : 'rates');
 
   // Settings state
   const [settings, setSettings] = useState<Settings | null>(null);
@@ -157,11 +158,13 @@ const SettingsPage: React.FC = () => {
   // Calculate landed cost
   const calcLandedCost = parseFloat(calcAed || '0') * parseFloat(aedRate || '36.5') * (1 + parseFloat(conversionPercent || '13') / 100);
 
+  const isCarWorld = user?.shop_id === 'CARWORLD';
+
   const tabs: { id: TabType; label: string; icon: React.ReactNode }[] = [
     { id: 'rates', label: 'Rates', icon: <Calculator size={18} /> },
     { id: 'users', label: 'Users', icon: <Users size={18} /> },
     { id: 'system', label: 'System', icon: <SettingsIcon size={18} /> }
-  ];
+  ].filter(tab => !(isCarWorld && tab.id === 'rates'));
 
   return (
     <Layout title="Settings">
@@ -188,56 +191,35 @@ const SettingsPage: React.FC = () => {
         {/* === RATES TAB === */}
         {activeTab === 'rates' && (
           <div className="space-y-6">
-            {/* Calculator Card */}
-            <div className="relative overflow-hidden bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-900 text-white rounded-2xl shadow-xl p-6">
-              <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-500/10 rounded-full -translate-y-1/2 translate-x-1/4 blur-3xl pointer-events-none" />
-              <div className="relative">
-                <div className="flex items-center gap-2.5 mb-5">
-                  <div className="p-2 bg-white/10 rounded-lg backdrop-blur-xl">
-                    <Calculator size={20} className="text-brand-400" />
-                  </div>
-                  <h2 className="font-bold text-lg">Dubai Cost Calculator</h2>
-                </div>
-
-                <div className="flex gap-4 mb-4 items-end">
-                  <div className="flex-1 space-y-1.5">
-                    <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">AED Price</label>
-                    <input
-                      type="number"
-                      value={calcAed}
-                      onChange={e => setCalcAed(e.target.value)}
-                      className="w-full bg-white/10 border border-white/20 rounded-xl px-4 py-3 text-white font-mono font-bold focus:ring-2 focus:ring-brand-500 outline-none backdrop-blur-xl"
-                    />
-                  </div>
-                  <div className="flex items-center pb-3">
-                    <span className="text-2xl text-slate-500 font-bold">→</span>
-                  </div>
-                  <div className="flex-1 space-y-1.5">
-                    <label className="text-xs font-bold text-brand-300 uppercase tracking-wider">Landed KES</label>
-                    <div className="w-full bg-brand-600/20 border border-brand-500/30 rounded-xl px-4 py-3 text-brand-300 font-mono font-extrabold text-xl backdrop-blur-xl">
-                      {calcLandedCost.toLocaleString(undefined, { maximumFractionDigits: 0 })}
-                    </div>
-                  </div>
-                </div>
-                <div className="text-xs text-slate-500 font-mono">
-                  Formula: AED × {aedRate} × (1 + {conversionPercent}%) = KES
-                </div>
+            {showAED && (
+          <div className="card-modern p-6 mb-8 bg-blue-50 dark:bg-slate-800/50 border-blue-200 dark:border-blue-900/50">
+            <h3 className="text-sm font-bold text-blue-800 dark:text-blue-400 uppercase tracking-wider mb-4 flex items-center gap-2">
+              <RefreshCw size={16} /> Cost Calculator Preview
+            </h3>
+            <div className="flex items-center gap-4 flex-wrap">
+              <div className="flex items-center gap-2">
+                <span className="text-slate-600 dark:text-slate-400 font-medium">Test AED:</span>
+                <input 
+                  type="number" 
+                  value={calcAed} 
+                  onChange={e => setCalcAed(e.target.value)} 
+                  className="w-24 px-3 py-1.5 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg outline-none focus:border-blue-500" 
+                />
+              </div>
+              <span className="text-slate-400">→</span>
+              <div className="flex items-center gap-2 bg-white dark:bg-slate-900 px-4 py-2 rounded-lg border border-slate-200 dark:border-slate-700 shadow-sm">
+                <span className="text-slate-500 font-medium">Landed Cost:</span>
+                <span className="font-bold text-slate-900 dark:text-white">
+                  KSh {Math.round(parseFloat(calcAed || '0') * parseFloat(aedRate || '0') * (1 + parseFloat(conversionPercent || '0') / 100)).toLocaleString()}
+                </span>
               </div>
             </div>
+          </div>
+          )}
 
             {/* Rate Settings */}
             <div className="card-modern p-5 lg:p-6 space-y-5">
               <h3 className="font-bold text-lg text-slate-900 dark:text-white">Conversion Rates</h3>
-
-              <div className="space-y-1.5">
-                <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider pl-1">AED Exchange Rate (KES per 1 AED)</label>
-                <input type="number" step="0.1" value={aedRate} onChange={e => setAedRate(e.target.value)} className="input-modern" />
-              </div>
-
-              <div className="space-y-1.5">
-                <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider pl-1">Import/Conversion Percentage (%)</label>
-                <input type="number" step="1" value={conversionPercent} onChange={e => setConversionPercent(e.target.value)} className="input-modern" />
-                <p className="text-xs text-slate-400 pl-1 mt-1">E.g., 13% for shipping, customs, and handling overhead</p>
               </div>
 
               <div className="space-y-1.5">

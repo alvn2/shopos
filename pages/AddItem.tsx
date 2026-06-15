@@ -4,6 +4,7 @@ import { useInventory } from '../contexts/InventoryContext';
 import { api } from '../services/api';
 import { v4 as uuidv4 } from 'uuid';
 import { Save, Package, AlertCircle, Check, Zap, RefreshCw, ArrowRight, Layers } from 'lucide-react';
+import { Save, Package, AlertCircle, Check, Zap, RefreshCw, ArrowRight, Layers, DollarSign } from 'lucide-react';
 import { PartMake, InventoryItem } from '../types';
 import { useAuth } from '../contexts/AuthContext';
 import { toast } from 'react-hot-toast';
@@ -11,6 +12,7 @@ import { toast } from 'react-hot-toast';
 const AddItem: React.FC = () => {
     const { items, addLocalItem, updateLocalItem, settings, refreshInventory } = useInventory();
     const { user } = useAuth();
+    const showAED = user?.shop_id !== 'CARWORLD';
     const partNumberRef = useRef<HTMLInputElement>(null);
 
     // Form state
@@ -88,7 +90,8 @@ const AddItem: React.FC = () => {
 
         const hasAedPrice = aedBuyingPrice && parseFloat(aedBuyingPrice) > 0;
         const hasKshPrice = kshBuyingPrice && parseFloat(kshBuyingPrice) > 0;
-        if (!hasAedPrice && !hasKshPrice) { setError('Please enter a buying price (AED or KSH)'); return; }
+        if (showAED && !hasAedPrice && !hasKshPrice) { setError('Please enter a buying price (AED or KSH)'); return; }
+        if (!showAED && !hasKshPrice) { setError('Please enter a buying price (KSH)'); return; }
         if (!sellingPrice || parseFloat(sellingPrice) <= 0) { setError('Valid selling price (KES) is required'); return; }
 
         setSubmitting(true);
@@ -207,7 +210,7 @@ const AddItem: React.FC = () => {
     };
 
     // Calculate estimated profit margin
-    const estimatedLandedCost = aedBuyingPrice ? parseFloat(aedBuyingPrice) * aedRate * (1 + conversionPercent / 100) : 0;
+    const estimatedLandedCost = showAED && aedBuyingPrice ? parseFloat(aedBuyingPrice) * aedRate * (1 + conversionPercent / 100) : (kshBuyingPrice ? parseFloat(kshBuyingPrice) : 0);
     const estimatedProfit = sellingPrice ? parseFloat(sellingPrice) - estimatedLandedCost : 0;
     const marginPercent = sellingPrice && estimatedLandedCost ? ((estimatedProfit / parseFloat(sellingPrice)) * 100) : 0;
 
@@ -336,10 +339,12 @@ const AddItem: React.FC = () => {
                                                 <span className="text-amber-600 dark:text-amber-400 font-semibold block">Current Stock</span>
                                                 <span className="font-bold text-slate-900 dark:text-white text-base">{existingMatch.stock_qty}</span>
                                             </div>
-                                            <div className="bg-white/60 dark:bg-slate-800/60 rounded-lg p-2">
-                                                <span className="text-amber-600 dark:text-amber-400 font-semibold block">Buy AED</span>
-                                                <span className="font-bold text-slate-900 dark:text-white text-base">{existingMatch.aed_buying_price}</span>
-                                            </div>
+                                            {showAED && existingMatch.aed_buying_price > 0 && (
+                                                <div className="bg-white/60 dark:bg-slate-800/60 rounded-lg p-2">
+                                                    <span className="text-amber-600 dark:text-amber-400 font-semibold block">Buy AED</span>
+                                                    <span className="font-bold text-slate-900 dark:text-white text-base">{existingMatch.aed_buying_price}</span>
+                                                </div>
+                                            )}
                                             <div className="bg-white/60 dark:bg-slate-800/60 rounded-lg p-2">
                                                 <span className="text-amber-600 dark:text-amber-400 font-semibold block">Sell KES</span>
                                                 <span className="font-bold text-slate-900 dark:text-white text-base">{existingMatch.selling_price.toLocaleString()}</span>
@@ -376,37 +381,39 @@ const AddItem: React.FC = () => {
                         <h2 className="font-bold text-slate-900 dark:text-white mb-5 text-lg">Pricing</h2>
 
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div className="space-y-1.5">
-                                <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider pl-1">
-                                    Buying Price (AED)
-                                </label>
-                                <input
-                                    type="number"
-                                    step="0.01"
-                                    min="0"
-                                    value={aedBuyingPrice}
-                                    onChange={e => {
-                                        const val = e.target.value;
-                                        setAedBuyingPrice(val);
-                                        if (!sellingPrice) {
-                                            let cost = 0;
-                                            if (kshBuyingPrice && parseFloat(kshBuyingPrice) > 0) {
-                                                cost = parseFloat(kshBuyingPrice);
-                                            } else if (val && parseFloat(val) > 0) {
-                                                cost = parseFloat(val) * aedRate * (1 + conversionPercent / 100);
+                            {/* Buying Price (AED) - Only for non-CarWorld */}
+                            {showAED && (
+                                <div className="space-y-1.5">
+                                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2 flex items-center gap-2">
+                                        <DollarSign size={16} className="text-amber-500" />
+                                        Buying Price (AED)
+                                    </label>
+                                    <input
+                                        type="number"
+                                        step="0.01"
+                                        min="0"
+                                        value={aedBuyingPrice}
+                                        onChange={(e) => {
+                                            const val = e.target.value;
+                                            setAedBuyingPrice(val);
+                                            setKshBuyingPrice(''); // Clear direct KSH if AED is entered
+                                            // Auto-calc selling price if not set
+                                            if (val && !sellingPrice) {
+                                                const cost = parseFloat(val) * aedRate * (1 + conversionPercent / 100);
+                                                setSellingPrice(Math.ceil(cost * 1.2 / 50) * 50 + ""); // 20% markup, round to 50
                                             }
-                                            if (cost > 0) setSellingPrice((cost * 1.5).toFixed(0));
-                                        }
-                                    }}
-                                    placeholder={existingMatch ? `Current: ${existingMatch.aed_buying_price}` : '0.00'}
-                                    className="input-modern"
-                                />
-                                {aedBuyingPrice && (
-                                    <p className="text-xs text-slate-500 pl-1">
-                                        Est. landed: <span className="font-bold text-slate-700 dark:text-slate-300">KES {estimatedLandedCost.toLocaleString(undefined, { maximumFractionDigits: 0 })}</span>
-                                    </p>
-                                )}
-                            </div>
+                                        }}
+                                        className="input-modern"
+                                        placeholder={existingMatch ? `Current: ${existingMatch.aed_buying_price}` : '0.00'}
+                                    />
+                                    {aedBuyingPrice && (
+                                        <p className="mt-2 text-xs text-slate-500 flex items-center gap-1">
+                                            <span className="font-semibold text-slate-700 dark:text-slate-300">Est. Landed Cost:</span>
+                                            KES {Math.round(estimatedLandedCost).toLocaleString()}
+                                        </p>
+                                    )}
+                                </div>
+                            )}
 
                             <div className="space-y-1.5">
                                 <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider pl-1">
@@ -450,10 +457,10 @@ const AddItem: React.FC = () => {
                                     className="input-modern"
                                     required
                                 />
-                                {sellingPrice && aedBuyingPrice && (
-                                    <p className={`text-xs pl-1 font-bold ${marginPercent >= 20 ? 'text-emerald-600 dark:text-emerald-400' : marginPercent > 0 ? 'text-amber-600' : 'text-rose-600'}`}>
+                                {sellingPrice && (showAED ? aedBuyingPrice : true) && (
+                                    <div className={`mt-2 p-2 rounded-lg text-xs font-bold ${marginPercent >= 20 ? 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400' : marginPercent > 0 ? 'bg-amber-50 dark:bg-amber-900/20 text-amber-600' : 'bg-rose-50 dark:bg-rose-900/20 text-rose-600'}`}>
                                         Margin: {marginPercent.toFixed(1)}% ({estimatedProfit >= 0 ? '+' : ''}{estimatedProfit.toLocaleString(undefined, { maximumFractionDigits: 0 })} KES)
-                                    </p>
+                                    </div>
                                 )}
                             </div>
                         </div>

@@ -6,6 +6,7 @@ export enum UserRole {
 
 export interface User {
   username: string;
+  shop_id?: string;
   password_hash?: string;  // For local storage (mock)
   role: UserRole;
   full_name: string;

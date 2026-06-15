@@ -1,29 +1,27 @@
 /**
  * ShopOS Hybrid API Service
  * 
- * - Primary: Backend API (connected to Google Sheets)
- * - Fallback: localStorage (offline mode)
+ * - Primary: Backend API
+ * - Fallback: IndexedDB (offline mode)
  * - Auto-syncs when coming back online
  */
 
 import { InventoryItem, LoginResponse, SaleRecord, Settings, User, UserRole, Session } from '../types';
+import { idbStorage, idbSyncQueue } from './db';
 
 // ============================================================================
 // CONFIGURATION
 // ============================================================================
 
-// Backend API URL - defaults to localhost in development
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
-// Retry configuration
 const RETRY_CONFIG = {
   maxRetries: 3,
-  baseDelay: 1000, // 1 second
-  maxDelay: 10000, // 10 seconds
-  retryStatusCodes: [408, 429, 500, 502, 503, 504] // Status codes to retry
+  baseDelay: 1000,
+  maxDelay: 10000,
+  retryStatusCodes: [408, 429, 500, 502, 503, 504]
 };
 
-// Storage keys for offline cache
 const CACHE_KEYS = {
   INVENTORY: 'shopos_cache_inventory',
   SETTINGS: 'shopos_cache_settings',
@@ -31,140 +29,35 @@ const CACHE_KEYS = {
   SALES: 'shopos_cache_sales',
   SESSION: 'shopos_session',
   USER: 'shopos_user',
-  SYNC_QUEUE: 'shopos_sync_queue',
   LAST_SYNC: 'shopos_last_sync'
-};
-
-// ============================================================================
-// SAFE STORAGE (handles iframe/private mode restrictions)
-// ============================================================================
-
-class SafeStorage {
-  private memoryStorage: Map<string, string>;
-  private isSupported: boolean;
-
-  constructor() {
-    this.memoryStorage = new Map();
-    this.isSupported = false;
-    try {
-      const testKey = '__shopos_test__';
-      window.localStorage.setItem(testKey, testKey);
-      window.localStorage.removeItem(testKey);
-      this.isSupported = true;
-    } catch (e) {
-      this.isSupported = false;
-    }
-  }
-
-  getItem(key: string): string | null {
-    if (this.isSupported) {
-      try {
-        return window.localStorage.getItem(key);
-      } catch (e) {
-        return this.memoryStorage.get(key) || null;
-      }
-    }
-    return this.memoryStorage.get(key) || null;
-  }
-
-  setItem(key: string, value: string): void {
-    if (this.isSupported) {
-      try {
-        window.localStorage.setItem(key, value);
-      } catch (e) { /* ignore quota/security errors */ }
-    }
-    this.memoryStorage.set(key, value);
-  }
-
-  removeItem(key: string): void {
-    if (this.isSupported) {
-      try {
-        window.localStorage.removeItem(key);
-      } catch (e) { /* ignore */ }
-    }
-    this.memoryStorage.delete(key);
-  }
-
-  clear(): void {
-    if (this.isSupported) {
-      try {
-        window.localStorage.clear();
-      } catch (e) { /* ignore */ }
-    }
-    this.memoryStorage.clear();
-  }
-}
-
-export const storage = new SafeStorage();
-
-// ============================================================================
-// SYNC QUEUE (for offline actions)
-// ============================================================================
-
-interface SyncAction {
-  id: string;
-  endpoint: string;
-  method: 'POST' | 'PUT' | 'DELETE' | 'PATCH';
-  body?: any;
-  timestamp: number;
-}
-
-const syncQueue = {
-  add: (action: Omit<SyncAction, 'id' | 'timestamp'>) => {
-    const queue = syncQueue.getAll();
-    queue.push({
-      ...action,
-      id: `sync_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-      timestamp: Date.now()
-    });
-    storage.setItem(CACHE_KEYS.SYNC_QUEUE, JSON.stringify(queue));
-  },
-  getAll: (): SyncAction[] => {
-    const data = storage.getItem(CACHE_KEYS.SYNC_QUEUE);
-    return data ? JSON.parse(data) : [];
-  },
-  clear: () => {
-    storage.setItem(CACHE_KEYS.SYNC_QUEUE, '[]');
-  },
-  remove: (id: string) => {
-    const queue = syncQueue.getAll().filter(a => a.id !== id);
-    storage.setItem(CACHE_KEYS.SYNC_QUEUE, JSON.stringify(queue));
-  }
 };
 
 // ============================================================================
 // UTILITY FUNCTIONS
 // ============================================================================
 
-/**
- * Sleep for a given number of milliseconds
- */
 function sleep(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-/**
- * Calculate exponential backoff delay with jitter
- */
 function getBackoffDelay(attempt: number): number {
   const delay = Math.min(
     RETRY_CONFIG.baseDelay * Math.pow(2, attempt),
     RETRY_CONFIG.maxDelay
   );
-  // Add jitter (±20%)
   return delay * (0.8 + Math.random() * 0.4);
 }
 
 // ============================================================================
-// HTTP CLIENT with offline fallback and retry logic
+// HTTP CLIENT
 // ============================================================================
 
 async function fetchAPI<T>(
   endpoint: string,
   options: RequestInit = {},
-  offlineFallback?: () => T
+  offlineFallback?: () => Promise<T>
 ): Promise<T> {
-  const sessionId = storage.getItem(CACHE_KEYS.SESSION);
+  const sessionId = await idbStorage.get<string>(CACHE_KEYS.SESSION);
 
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
@@ -185,21 +78,18 @@ async function fetchAPI<T>(
         credentials: 'include'
       });
 
-      // Check if we should retry based on status code
       if (!response.ok) {
         if (response.status === 401) {
-          // Global handler for invalid session - don't retry
-          storage.removeItem(CACHE_KEYS.SESSION);
-          storage.removeItem(CACHE_KEYS.USER);
+          await idbStorage.remove(CACHE_KEYS.SESSION);
+          await idbStorage.remove(CACHE_KEYS.USER);
           window.dispatchEvent(new Event('shopos:logout'));
           const error = await response.json().catch(() => ({ error: 'Session expired' }));
           throw new Error(error.error || 'Session expired');
         }
 
-        // Check if this status code should be retried
         if (RETRY_CONFIG.retryStatusCodes.includes(response.status) && attempt < RETRY_CONFIG.maxRetries - 1) {
           const delay = getBackoffDelay(attempt);
-          console.warn(`[API] Request failed with ${response.status}, retrying in ${Math.round(delay)}ms (attempt ${attempt + 1}/${RETRY_CONFIG.maxRetries})`);
+          console.warn(`[API] Request failed with ${response.status}, retrying in ${Math.round(delay)}ms`);
           await sleep(delay);
           continue;
         }
@@ -216,7 +106,6 @@ async function fetchAPI<T>(
     } catch (error: any) {
       lastError = error;
 
-      // Network error - we're offline
       if (error.message === 'Failed to fetch' || !navigator.onLine) {
         console.warn(`[Offline] ${endpoint} - using cache`);
         if (offlineFallback) {
@@ -225,22 +114,19 @@ async function fetchAPI<T>(
         throw error;
       }
 
-      // Don't retry if it's not a retryable error
       if (error.message?.includes('Session expired') || error.message?.includes('401')) {
         throw error;
       }
 
-      // Retry for network-related errors
       if (attempt < RETRY_CONFIG.maxRetries - 1) {
         const delay = getBackoffDelay(attempt);
-        console.warn(`[API] Request failed, retrying in ${Math.round(delay)}ms (attempt ${attempt + 1}/${RETRY_CONFIG.maxRetries}):`, error.message);
+        console.warn(`[API] Request failed, retrying in ${Math.round(delay)}ms:`, error.message);
         await sleep(delay);
         continue;
       }
     }
   }
 
-  // All retries exhausted
   throw lastError || new Error(`Request to ${endpoint} failed after ${RETRY_CONFIG.maxRetries} attempts`);
 }
 
@@ -250,69 +136,69 @@ async function fetchAPI<T>(
 
 const cache = {
   inventory: {
-    get: (): InventoryItem[] => {
-      const data = storage.getItem(CACHE_KEYS.INVENTORY);
-      return data ? JSON.parse(data) : [];
+    get: async (): Promise<InventoryItem[]> => {
+      const data = await idbStorage.get<InventoryItem[]>(CACHE_KEYS.INVENTORY);
+      return data || [];
     },
-    set: (items: InventoryItem[]) => {
-      storage.setItem(CACHE_KEYS.INVENTORY, JSON.stringify(items));
+    set: async (items: InventoryItem[]) => {
+      await idbStorage.set(CACHE_KEYS.INVENTORY, items);
     }
   },
   settings: {
-    get: (): Settings => {
-      const data = storage.getItem(CACHE_KEYS.SETTINGS);
-      return data ? JSON.parse(data) : { aed_rate: 36.5, conversion_percent: 13, default_min_stock: 5 };
+    get: async (): Promise<Settings> => {
+      const data = await idbStorage.get<Settings>(CACHE_KEYS.SETTINGS);
+      return data || { aed_rate: 36.5, conversion_percent: 13, default_min_stock: 5 };
     },
-    set: (settings: Settings) => {
-      storage.setItem(CACHE_KEYS.SETTINGS, JSON.stringify(settings));
+    set: async (settings: Settings) => {
+      await idbStorage.set(CACHE_KEYS.SETTINGS, settings);
     }
   },
   users: {
-    get: (): User[] => {
-      const data = storage.getItem(CACHE_KEYS.USERS);
-      return data ? JSON.parse(data) : [];
+    get: async (): Promise<User[]> => {
+      const data = await idbStorage.get<User[]>(CACHE_KEYS.USERS);
+      return data || [];
     },
-    set: (users: User[]) => {
-      storage.setItem(CACHE_KEYS.USERS, JSON.stringify(users));
+    set: async (users: User[]) => {
+      await idbStorage.set(CACHE_KEYS.USERS, users);
     }
   },
   sales: {
-    get: (): any[] => {
-      const data = storage.getItem(CACHE_KEYS.SALES);
-      return data ? JSON.parse(data) : [];
+    get: async (): Promise<any[]> => {
+      const data = await idbStorage.get<any[]>(CACHE_KEYS.SALES);
+      return data || [];
     },
-    set: (sales: any[]) => {
-      storage.setItem(CACHE_KEYS.SALES, JSON.stringify(sales));
+    set: async (sales: any[]) => {
+      await idbStorage.set(CACHE_KEYS.SALES, sales);
     },
-    add: (sale: any) => {
-      const sales = cache.sales.get();
+    add: async (sale: any) => {
+      const sales = await cache.sales.get();
       sales.push(sale);
-      cache.sales.set(sales);
+      await cache.sales.set(sales);
     }
   }
 };
 
 // ============================================================================
-// API IMPLEMENTATION (Hybrid: Backend + Offline)
+// API IMPLEMENTATION
 // ============================================================================
 
 export const api = {
   // ------ AUTH ------
   auth: {
-    login: async (username: string, password: string, device_info: string): Promise<LoginResponse> => {
+    login: async (shop_id: string, username: string, password: string, device_info: string): Promise<LoginResponse> => {
       const response = await fetchAPI<{ session_id: string; user: any }>('/auth/login', {
         method: 'POST',
-        body: JSON.stringify({ username, password, device_info })
+        body: JSON.stringify({ shop_id, username, password, device_info })
       });
 
-      // Store session locally
-      storage.setItem(CACHE_KEYS.SESSION, response.session_id);
-      storage.setItem(CACHE_KEYS.USER, JSON.stringify(response.user));
+      await idbStorage.set(CACHE_KEYS.SESSION, response.session_id);
+      await idbStorage.set(CACHE_KEYS.USER, response.user);
 
       return {
         session_id: response.session_id,
         user: {
           username: response.user.username,
+          shop_id: response.user.shop_id,
           role: response.user.role as UserRole,
           full_name: response.user.full_name,
           created_at: response.user.created_at || '',
@@ -325,11 +211,9 @@ export const api = {
     logout: async (): Promise<void> => {
       try {
         await fetchAPI('/auth/logout', { method: 'POST' });
-      } catch (e) {
-        // Ignore errors on logout
-      }
-      storage.removeItem(CACHE_KEYS.SESSION);
-      storage.removeItem(CACHE_KEYS.USER);
+      } catch (e) { }
+      await idbStorage.remove(CACHE_KEYS.SESSION);
+      await idbStorage.remove(CACHE_KEYS.USER);
     },
 
     verify: async (): Promise<boolean> => {
@@ -337,10 +221,8 @@ export const api = {
         const result = await fetchAPI<{ valid: boolean }>('/auth/verify');
         return result.valid;
       } catch (e: any) {
-        // Only fallback if it's a network error (offline)
-        // If server responds with 401/403, the session is invalid -> return false
         if (e.message === 'Failed to fetch' || !navigator.onLine) {
-          const session = storage.getItem(CACHE_KEYS.SESSION);
+          const session = await idbStorage.get(CACHE_KEYS.SESSION);
           return !!session;
         }
         return false;
@@ -370,13 +252,12 @@ export const api = {
       return response.count;
     },
 
-    getStoredUser: (): User | null => {
-      const data = storage.getItem(CACHE_KEYS.USER);
-      return data ? JSON.parse(data) : null;
+    getStoredUser: async (): Promise<User | null> => {
+      return await idbStorage.get<User>(CACHE_KEYS.USER);
     },
 
-    getStoredSession: (): string | null => {
-      return storage.getItem(CACHE_KEYS.SESSION);
+    getStoredSession: async (): Promise<string | null> => {
+      return await idbStorage.get<string>(CACHE_KEYS.SESSION);
     }
   },
 
@@ -386,25 +267,21 @@ export const api = {
       const items = await fetchAPI<InventoryItem[]>(
         '/inventory',
         {},
-        () => cache.inventory.get() // Offline fallback
+        () => cache.inventory.get()
       );
 
-      // Cache for offline use
       if (navigator.onLine) {
-        cache.inventory.set(items);
+        await cache.inventory.set(items);
       }
-
       return items;
     },
 
     create: async (item: Omit<InventoryItem, 'last_updated' | 'updated_by'>): Promise<{ success: boolean }> => {
       if (!navigator.onLine) {
-        // Queue for sync
-        syncQueue.add({ endpoint: '/inventory', method: 'POST', body: item });
-        // Add to local cache
-        const items = cache.inventory.get();
+        await idbSyncQueue.add({ endpoint: '/inventory', method: 'POST', body: item });
+        const items = await cache.inventory.get();
         items.push({ ...item, last_updated: new Date().toISOString(), updated_by: 'offline' } as InventoryItem);
-        cache.inventory.set(items);
+        await cache.inventory.set(items);
         return { success: true };
       }
 
@@ -412,19 +289,17 @@ export const api = {
         method: 'POST',
         body: JSON.stringify(item)
       });
-
       return { success: true };
     },
 
     update: async (uuid: string, updates: Partial<InventoryItem>): Promise<{ success: boolean }> => {
       if (!navigator.onLine) {
-        syncQueue.add({ endpoint: `/inventory/${uuid}`, method: 'PUT', body: updates });
-        // Update local cache
-        const items = cache.inventory.get();
+        await idbSyncQueue.add({ endpoint: `/inventory/${uuid}`, method: 'PUT', body: updates });
+        const items = await cache.inventory.get();
         const index = items.findIndex(i => i.uuid === uuid);
         if (index !== -1) {
           items[index] = { ...items[index], ...updates, last_updated: new Date().toISOString() };
-          cache.inventory.set(items);
+          await cache.inventory.set(items);
         }
         return { success: true };
       }
@@ -433,22 +308,20 @@ export const api = {
         method: 'PUT',
         body: JSON.stringify(updates)
       });
-
       return { success: true };
     },
 
     updateBatch: async (updates: Array<{ uuid: string } & Partial<InventoryItem>>): Promise<{ success: boolean; count: number }> => {
       if (!navigator.onLine) {
-        syncQueue.add({ endpoint: '/inventory/batch', method: 'PUT', body: updates });
-        // Update local cache
-        const items = cache.inventory.get();
+        await idbSyncQueue.add({ endpoint: '/inventory/batch', method: 'PUT', body: { updates } });
+        const items = await cache.inventory.get();
         updates.forEach(update => {
           const index = items.findIndex(i => i.uuid === update.uuid);
           if (index !== -1) {
             items[index] = { ...items[index], ...update, last_updated: new Date().toISOString() };
           }
         });
-        cache.inventory.set(items);
+        await cache.inventory.set(items);
         return { success: true, count: updates.length };
       }
 
@@ -456,7 +329,6 @@ export const api = {
         method: 'PUT',
         body: JSON.stringify({ updates })
       });
-
       return { success: true, count: updates.length };
     },
 
@@ -475,10 +347,9 @@ export const api = {
 
     delete: async (uuid: string): Promise<{ success: boolean }> => {
       if (!navigator.onLine) {
-        syncQueue.add({ endpoint: `/inventory/${uuid}`, method: 'DELETE' });
-        // Remove from local cache
-        const items = cache.inventory.get().filter(i => i.uuid !== uuid);
-        cache.inventory.set(items);
+        await idbSyncQueue.add({ endpoint: `/inventory/${uuid}`, method: 'DELETE' });
+        const items = (await cache.inventory.get()).filter(i => i.uuid !== uuid);
+        await cache.inventory.set(items);
         return { success: true };
       }
 
@@ -497,28 +368,25 @@ export const api = {
       };
 
       if (!navigator.onLine) {
-        syncQueue.add({ endpoint: '/sales', method: 'POST', body: saleData });
-        cache.sales.add(saleData);
-        // Also update inventory locally
+        await idbSyncQueue.add({ endpoint: '/sales', method: 'POST', body: saleData });
+        await cache.sales.add(saleData);
         if (data.items) {
-          const items = cache.inventory.get();
+          const items = await cache.inventory.get();
           data.items.forEach((saleItem: any) => {
             const item = items.find(i => i.uuid === saleItem.uuid);
             if (item) {
               item.stock_qty = Math.max(0, item.stock_qty - saleItem.qty);
             }
           });
-          cache.inventory.set(items);
+          await cache.inventory.set(items);
         }
         return { batch_id: saleData.batch_id };
       }
 
-      const response = await fetchAPI<{ batch_id: string }>('/sales', {
+      return fetchAPI<{ batch_id: string }>('/sales', {
         method: 'POST',
         body: JSON.stringify(saleData)
       });
-
-      return response;
     },
 
     getAll: async (): Promise<any[]> => {
@@ -529,9 +397,8 @@ export const api = {
       );
 
       if (navigator.onLine) {
-        cache.sales.set(sales);
+        await cache.sales.set(sales);
       }
-
       return sales;
     }
   },
@@ -546,18 +413,17 @@ export const api = {
       );
 
       if (navigator.onLine) {
-        cache.settings.set(settings);
+        await cache.settings.set(settings);
       }
-
       return settings;
     },
 
     update: async (settings: Partial<Settings>): Promise<Settings> => {
       if (!navigator.onLine) {
-        const current = cache.settings.get();
+        const current = await cache.settings.get();
         const updated = { ...current, ...settings };
-        cache.settings.set(updated);
-        syncQueue.add({ endpoint: '/settings', method: 'PUT', body: settings });
+        await cache.settings.set(updated);
+        await idbSyncQueue.add({ endpoint: '/settings', method: 'PUT', body: settings });
         return updated;
       }
 
@@ -566,7 +432,7 @@ export const api = {
         body: JSON.stringify(settings)
       });
 
-      cache.settings.set(response);
+      await cache.settings.set(response);
       return response;
     }
   },
@@ -591,9 +457,8 @@ export const api = {
       }));
 
       if (navigator.onLine) {
-        cache.users.set(mapped);
+        await cache.users.set(mapped);
       }
-
       return mapped;
     },
 
@@ -641,7 +506,6 @@ export const api = {
       if (params?.from) query.set('from', params.from);
       if (params?.to) query.set('to', params.to);
       if (params?.paymentMethod) query.set('payment_method', params.paymentMethod);
-
       return fetchAPI(`/reports/sales-summary?${query.toString()}`);
     },
 
@@ -649,72 +513,33 @@ export const api = {
       const query = new URLSearchParams();
       if (params?.minStock !== undefined) query.set('minStock', params.minStock.toString());
       if (params?.maxStock !== undefined) query.set('maxStock', params.maxStock.toString());
-
       const queryString = query.toString() ? `?${query.toString()}` : '';
       return fetchAPI(`/reports/inventory-health${queryString}`);
     }
   },
 
-  // ------ AUDIT ------
-  audit: {
-    getLogs: async (params?: { user?: string; action?: string; from?: string; to?: string; search?: string; page?: number; limit?: number }): Promise<{ logs: any[]; total: number }> => {
-      const query = new URLSearchParams();
-      if (params?.user && params.user !== 'All') query.set('user', params.user);
-      if (params?.action && params.action !== 'All') query.set('action', params.action);
-      if (params?.from) query.set('from', params.from);
-      if (params?.to) query.set('to', params.to);
-      if (params?.search) query.set('search', params.search);
-      if (params?.page) query.set('page', params.page.toString());
-      if (params?.limit) query.set('limit', params.limit.toString());
-      return fetchAPI(`/audit?${query.toString()}`);
-    },
-    getUsers: async (): Promise<string[]> => {
-      const result = await fetchAPI<{ users: string[] }>('/audit/users');
-      return result.users;
-    },
-    getActions: async (): Promise<string[]> => {
-      const result = await fetchAPI<{ actions: string[] }>('/audit/actions');
-      return result.actions;
-    }
-  },
-
   // ------ CUSTOMERS ------
   customers: {
-    getAll: async (): Promise<any[]> => {
-      return fetchAPI('/customers');
-    },
+    getAll: async (): Promise<any[]> => fetchAPI('/customers'),
     create: async (data: { name: string; phone: string; email?: string; notes?: string }): Promise<any> => {
-      return fetchAPI('/customers', {
-        method: 'POST',
-        body: JSON.stringify(data)
-      });
+      return fetchAPI('/customers', { method: 'POST', body: JSON.stringify(data) });
     },
     update: async (id: string, updates: any): Promise<any> => {
-      return fetchAPI(`/customers/${id}`, {
-        method: 'PUT',
-        body: JSON.stringify(updates)
-      });
+      return fetchAPI(`/customers/${id}`, { method: 'PUT', body: JSON.stringify(updates) });
     },
-    getLedger: async (id: string): Promise<any[]> => {
-      return fetchAPI(`/customers/${id}/ledger`);
-    },
+    getLedger: async (id: string): Promise<any[]> => fetchAPI(`/customers/${id}/ledger`),
     recordPayment: async (id: string, data: { amount: number; reference?: string }): Promise<any> => {
-      return fetchAPI(`/customers/${id}/payment`, {
-        method: 'POST',
-        body: JSON.stringify(data)
-      });
+      return fetchAPI(`/customers/${id}/payment`, { method: 'POST', body: JSON.stringify(data) });
     },
-    search: async (query: string): Promise<any[]> => {
-      return fetchAPI(`/customers?search=${encodeURIComponent(query)}`);
-    }
+    search: async (query: string): Promise<any[]> => fetchAPI(`/customers?search=${encodeURIComponent(query)}`)
   },
 
   // ------ SYNC ------
   sync: {
-    getPendingCount: (): number => syncQueue.getAll().length,
+    getPendingCount: async (): Promise<number> => await idbSyncQueue.count(),
 
     syncAll: async (): Promise<{ synced: number; failed: number }> => {
-      const queue = syncQueue.getAll();
+      const queue = await idbSyncQueue.getAll();
       let synced = 0;
       let failed = 0;
 
@@ -724,7 +549,7 @@ export const api = {
             method: action.method,
             body: action.body ? JSON.stringify(action.body) : undefined
           });
-          syncQueue.remove(action.id);
+          await idbSyncQueue.remove(action.id);
           synced++;
         } catch (e) {
           console.error(`Sync failed for ${action.endpoint}:`, e);
@@ -733,14 +558,14 @@ export const api = {
       }
 
       if (synced > 0) {
-        storage.setItem(CACHE_KEYS.LAST_SYNC, new Date().toISOString());
+        await idbStorage.set(CACHE_KEYS.LAST_SYNC, new Date().toISOString());
       }
 
       return { synced, failed };
     },
 
-    getLastSyncTime: (): Date | null => {
-      const time = storage.getItem(CACHE_KEYS.LAST_SYNC);
+    getLastSyncTime: async (): Promise<Date | null> => {
+      const time = await idbStorage.get<string>(CACHE_KEYS.LAST_SYNC);
       return time ? new Date(time) : null;
     }
   }

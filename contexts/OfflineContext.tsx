@@ -19,8 +19,11 @@ export const OfflineProvider: React.FC<{ children: ReactNode }> = ({ children })
 
     // Load initial state
     useEffect(() => {
-        setPendingCount(api.sync.getPendingCount());
-        setLastSyncTime(api.sync.getLastSyncTime());
+        const loadInitialState = async () => {
+            setPendingCount(await api.sync.getPendingCount());
+            setLastSyncTime(await api.sync.getLastSyncTime());
+        };
+        loadInitialState();
     }, []);
 
     // Listen for online/offline events
@@ -48,7 +51,7 @@ export const OfflineProvider: React.FC<{ children: ReactNode }> = ({ children })
     const syncNow = useCallback(async () => {
         if (!navigator.onLine || isSyncing) return;
 
-        const pending = api.sync.getPendingCount();
+        const pending = await api.sync.getPendingCount();
         if (pending === 0) {
             setLastSyncTime(new Date());
             return;
@@ -58,8 +61,8 @@ export const OfflineProvider: React.FC<{ children: ReactNode }> = ({ children })
         try {
             const result = await api.sync.syncAll();
             console.log(`Synced ${result.synced} actions, ${result.failed} failed`);
-            setPendingCount(api.sync.getPendingCount());
-            setLastSyncTime(api.sync.getLastSyncTime());
+            setPendingCount(await api.sync.getPendingCount());
+            setLastSyncTime(await api.sync.getLastSyncTime());
         } catch (e) {
             console.error('Sync failed:', e);
         } finally {
@@ -69,9 +72,10 @@ export const OfflineProvider: React.FC<{ children: ReactNode }> = ({ children })
 
     // Periodic sync check
     useEffect(() => {
-        const interval = setInterval(() => {
-            setPendingCount(api.sync.getPendingCount());
-            if (navigator.onLine && api.sync.getPendingCount() > 0) {
+        const interval = setInterval(async () => {
+            const pendingCount = await api.sync.getPendingCount();
+            setPendingCount(pendingCount);
+            if (navigator.onLine && pendingCount > 0) {
                 syncNow();
             }
         }, 30000); // Every 30 seconds

@@ -1,11 +1,9 @@
 const express = require('express');
-const sheets = require('../services/sheets');
+const { prisma } = require('../services/prisma');
 const { authenticateSession, requireAdmin } = require('../middleware/auth');
 
 const router = express.Router();
-const TABS = sheets.TABS;
 
-// All audit routes require admin access
 router.use(authenticateSession);
 router.use(requireAdmin);
 
@@ -15,64 +13,67 @@ router.use(requireAdmin);
  */
 router.get('/', async (req, res) => {
     try {
+        const { shop_id } = req.user;
         const { user, action, from, to, search, page = 1, limit = 50 } = req.query;
 
-        let logs = await sheets.getAllRows(TABS.AUDIT_LOG);
+        const where = { shop_id };
 
-        // Filter by user
         if (user && user !== 'All') {
-            logs = logs.filter(l => l.User === user);
+            where.user = user;
         }
 
-        // Filter by action
         if (action && action !== 'All') {
-            logs = logs.filter(l => l.Action === action);
+            where.action = action;
         }
 
-        // Filter by date range
-        if (from) {
-            const fromDate = new Date(from);
-            logs = logs.filter(l => new Date(l.Timestamp) >= fromDate);
-        }
-        if (to) {
-            const toDate = new Date(to);
-            logs = logs.filter(l => new Date(l.Timestamp) <= toDate);
+        if (from || to) {
+            where.timestamp = {};
+            if (from) where.timestamp.gte = new Date(from);
+            if (to) where.timestamp.lte = new Date(to);
         }
 
-        // Search
         if (search) {
-            const searchLower = search.toLowerCase();
-            logs = logs.filter(l =>
-                (l.Entity_ID || '').toLowerCase().includes(searchLower) ||
-                (l.Old_Value || '').toLowerCase().includes(searchLower) ||
-                (l.New_Value || '').toLowerCase().includes(searchLower) ||
-                (l.User || '').toLowerCase().includes(searchLower) ||
-                (l.Action || '').toLowerCase().includes(searchLower)
-            );
+            where.OR = [
+                { user: { contains: search, mode: 'insensitive' } },
+                { action: { contains: search, mode: 'insensitive' } },
+                { details: { contains: search, mode: 'insensitive' } },
+            ];
         }
 
-        // Sort by timestamp descending
-        logs.sort((a, b) => new Date(b.Timestamp) - new Date(a.Timestamp));
-
-        // Pagination
-        const total = logs.length;
         const pageNum = parseInt(page);
         const limitNum = parseInt(limit);
         const offset = (pageNum - 1) * limitNum;
-        logs = logs.slice(offset, offset + limitNum);
 
-        // Transform for frontend
-        const transformed = logs.map(l => ({
-            timestamp: l.Timestamp,
-            user: l.User,
-            action: l.Action,
-            entity_type: l.Entity_Type,
-            entity_id: l.Entity_ID,
-            old_value: l.Old_Value,
-            new_value: l.New_Value,
-            ip_address: l.IP_Address,
-            device_info: l.Device_Info
-        }));
+        const [total, logs] = await Promise.all([
+            prisma.auditLog.count({ where }),
+            prisma.auditLog.findMany({
+                where,
+                orderBy: { timestamp: 'desc' },
+                skip: offset,
+                take: limitNum
+            })
+        ]);
+
+        const transformed = logs.map(l => {
+            let detailsObj = {};
+            try {
+                if (l.details) detailsObj = JSON.parse(l.details);
+            } catch (e) {
+                // ignore
+            }
+
+            return {
+                timestamp: l.timestamp.toISOString(),
+                user: l.user,
+                action: l.action,
+                entity_type: detailsObj.entityType || '',
+                entity_id: detailsObj.entityId || '',
+                old_value: detailsObj.oldValue ? JSON.stringify(detailsObj.oldValue) : '',
+                new_value: detailsObj.newValue ? JSON.stringify(detailsObj.newValue) : '',
+                ip_address: l.ip_address || '',
+                device_info: detailsObj.deviceInfo || ''
+            };
+        });
 
         res.json({
             logs: transformed,
@@ -92,9 +93,14 @@ router.get('/', async (req, res) => {
  */
 router.get('/users', async (req, res) => {
     try {
-        const logs = await sheets.getAllRows(TABS.AUDIT_LOG);
-        const users = [...new Set(logs.map(l => l.User).filter(Boolean))];
-        res.json({ users });
+        const { shop_id } = req.user;
+        const users = await prisma.auditLog.findMany({
+            where: { shop_id },
+            select: { user: true },
+            distinct: ['user']
+        });
+        
+        res.json({ users: users.map(u => u.user).filter(Boolean) });
     } catch (error) {
         console.error('Get audit users error:', error);
         res.status(500).json({ error: 'Failed to fetch users' });
@@ -107,9 +113,14 @@ router.get('/users', async (req, res) => {
  */
 router.get('/actions', async (req, res) => {
     try {
-        const logs = await sheets.getAllRows(TABS.AUDIT_LOG);
-        const actions = [...new Set(logs.map(l => l.Action).filter(Boolean))];
-        res.json({ actions });
+        const { shop_id } = req.user;
+        const actions = await prisma.auditLog.findMany({
+            where: { shop_id },
+            select: { action: true },
+            distinct: ['action']
+        });
+        
+        res.json({ actions: actions.map(a => a.action).filter(Boolean) });
     } catch (error) {
         console.error('Get audit actions error:', error);
         res.status(500).json({ error: 'Failed to fetch actions' });
