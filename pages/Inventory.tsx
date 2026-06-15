@@ -184,14 +184,39 @@ const Inventory: React.FC = () => {
   // Barcode label state
   const [barcodeItem, setBarcodeItem] = useState<InventoryItem | null>(null);
 
-  // Barcode scan handler — filter to scanned item
+  // Barcode & OCR scan handler
   const handleBarcodeScan = useCallback((code: string) => {
-    const item = items.find(i => i.part_number.toUpperCase() === code.toUpperCase());
-    if (item) {
-      setSearchTerm(item.part_number);
-      toast.success(`Found: ${item.name}`);
+    const upperCode = code.toUpperCase();
+    
+    // 1. Try exact barcode match first
+    const exactMatch = items.find(i => i.part_number.toUpperCase() === upperCode);
+    if (exactMatch) {
+      setSearchTerm(exactMatch.part_number);
+      toast.success(`Found: ${exactMatch.name}`);
+      return;
+    }
+
+    // 2. OCR Text processing
+    // Clean up text (remove newlines, extra spaces)
+    const cleanText = code.replace(/\n/g, ' ').replace(/\s+/g, ' ').trim();
+    
+    // Try to find if any word in the OCR text exactly matches a part number
+    const words = cleanText.split(' ').filter(w => w.length >= 3);
+    for (const word of words) {
+      const wordMatch = items.find(i => i.part_number.toUpperCase() === word.toUpperCase());
+      if (wordMatch) {
+        setSearchTerm(wordMatch.part_number);
+        toast.success(`Extracted part number: ${wordMatch.part_number}`);
+        return;
+      }
+    }
+
+    // 3. If no exact part number found, dump the cleaned text into search
+    if (cleanText) {
+      setSearchTerm(cleanText.substring(0, 50));
+      toast.success('Text scanned! Review and edit search.');
     } else {
-      toast.error(`No item found for barcode: ${code}`);
+      toast.error('No readable text found');
     }
   }, [items]);
 
