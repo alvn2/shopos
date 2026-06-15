@@ -96,15 +96,33 @@ const BarcodeScanner: React.FC<BarcodeScannerProps> = ({ onScan, label = 'Scan B
             await new Promise(resolve => setTimeout(resolve, 100)); // wait for video element to mount
             if (!videoRef.current) throw new Error('Video container not ready');
 
+            // Request high resolution for better OCR
             const stream = await navigator.mediaDevices.getUserMedia({
-                video: { facingMode: 'environment' }
+                video: { 
+                    facingMode: 'environment',
+                    width: { ideal: 1920 },
+                    height: { ideal: 1080 },
+                    advanced: [{ focusMode: 'continuous' } as any] // Try to force auto-focus if supported
+                }
             });
             
             streamRef.current = stream;
             videoRef.current.srcObject = stream;
             videoRef.current.play();
         } catch (err: any) {
-            handleCameraError(err);
+            // Fallback to basic constraints if high-res fails
+            try {
+                const fallbackStream = await navigator.mediaDevices.getUserMedia({
+                    video: { facingMode: 'environment' }
+                });
+                if (videoRef.current) {
+                    streamRef.current = fallbackStream;
+                    videoRef.current.srcObject = fallbackStream;
+                    videoRef.current.play();
+                }
+            } catch (fallbackErr: any) {
+                handleCameraError(fallbackErr);
+            }
         }
     };
 
@@ -151,6 +169,10 @@ const BarcodeScanner: React.FC<BarcodeScannerProps> = ({ onScan, label = 'Scan B
             
             if (!ctx) throw new Error('Failed to get canvas context');
             
+            // Apply CSS filters to the context to dramatically improve OCR accuracy
+            // Grayscale + High Contrast removes color noise and makes text pop
+            ctx.filter = 'grayscale(100%) contrast(150%) brightness(110%)';
+            
             // Draw current video frame to canvas
             ctx.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
             const imageDataUrl = canvas.toDataURL('image/png');
@@ -160,9 +182,11 @@ const BarcodeScanner: React.FC<BarcodeScannerProps> = ({ onScan, label = 'Scan B
                 logger: m => console.log(m)
             });
 
-            const text = result.data.text.trim();
-            if (!text) {
-                setError('No readable text found. Please try again with better lighting.');
+            // Clean up the gibberish: Replace non-alphanumeric (except spaces/dashes) to reduce noise
+            let text = result.data.text.replace(/[^\w\s-]/gi, '').replace(/\s+/g, ' ').trim();
+            
+            if (!text || text.length < 3) {
+                setError('No clear text found. Please ensure good lighting and steady focus.');
                 setIsProcessingOcr(false);
                 return;
             }
