@@ -45,7 +45,7 @@ router.get('/', async (req, res) => {
 
         const items = await prisma.inventoryItem.findMany({
             where,
-            orderBy: sort_by ? { [sort_by]: sort_order === 'desc' ? 'desc' : 'asc' } : { updated_at: 'desc' }
+            orderBy: sort_by ? { [sort_by]: sort_order === 'desc' ? 'desc' : 'asc' } : { last_updated: 'desc' }
         });
 
         let activeItems = items;
@@ -65,7 +65,7 @@ router.get('/', async (req, res) => {
             selling_price: item.selling_price,
             stock_qty: item.stock_qty,
             min_stock: item.min_stock,
-            last_updated: item.updated_at,
+            last_updated: item.last_updated,
             updated_by: item.updated_by
         }));
 
