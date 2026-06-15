@@ -110,30 +110,19 @@ const Login: React.FC = () => {
 
   return (
     <div className="relative min-h-screen flex items-center justify-center overflow-hidden bg-slate-950 px-4">
-      {/* Lively Animated background */}
-      <div className="absolute inset-0 z-0">
-        <div className="absolute top-0 -left-10 w-96 h-96 bg-blue-600/30 rounded-full mix-blend-screen filter blur-[100px] animate-pulse" />
-        <div className="absolute top-1/2 right-10 w-[30rem] h-[30rem] bg-indigo-600/30 rounded-full mix-blend-screen filter blur-[120px] animate-bounce" style={{ animationDuration: '7s' }} />
-        <div className="absolute -bottom-20 left-1/3 w-[25rem] h-[25rem] bg-cyan-500/20 rounded-full mix-blend-screen filter blur-[100px] animate-pulse" style={{ animationDelay: '2s' }} />
-      </div>
-
       <div className="relative z-10 w-full max-w-[420px]">
         {/* Brand Header */}
         <div className="text-center mb-10">
-          <div className="mx-auto w-24 h-24 bg-gradient-to-tr from-cyan-400 to-indigo-600 p-[3px] rounded-[2rem] shadow-2xl shadow-indigo-500/50 mb-6 transform hover:rotate-12 hover:scale-105 transition-all duration-500 cursor-pointer">
-            <div className="w-full h-full bg-slate-900/90 backdrop-blur-2xl rounded-[1.8rem] flex items-center justify-center">
-              <Package size={44} className="text-white drop-shadow-[0_0_15px_rgba(255,255,255,0.5)]" strokeWidth={1.5} />
-            </div>
+          <div className="mx-auto w-24 h-24 bg-gradient-to-tr from-slate-800 to-slate-900 p-[3px] rounded-[2rem] shadow-xl mb-6 flex items-center justify-center border border-slate-800">
+            <Package size={44} className="text-blue-500" strokeWidth={1.5} />
           </div>
-          <h1 className="text-5xl font-black tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 via-blue-500 to-indigo-600 mb-2 drop-shadow-sm">ShopOS</h1>
-          <p className="text-slate-300 font-medium tracking-wide">Next-Gen Inventory System</p>
+          <h1 className="text-5xl font-black tracking-tight text-white mb-2">ShopOS</h1>
+          <p className="text-slate-400 font-medium tracking-wide">Next-Gen Inventory System</p>
         </div>
 
-        {/* Glassmorphism Card */}
+        {/* Clean Login Card */}
         <div className="relative group">
-          <div className="absolute -inset-1 bg-gradient-to-r from-cyan-500 via-blue-500 to-indigo-600 rounded-3xl blur-md opacity-25 group-hover:opacity-50 transition duration-1000 group-hover:duration-200"></div>
-
-          <div className="relative bg-slate-900/60 backdrop-blur-2xl border border-white/10 p-8 sm:p-10 rounded-3xl shadow-[0_0_40px_rgba(0,0,0,0.5)]">
+          <div className="relative bg-slate-900/80 backdrop-blur-xl border border-slate-800 p-8 sm:p-10 rounded-3xl shadow-2xl">
             
             {error && (
               <div className="bg-rose-500/10 border border-rose-500/20 text-rose-400 p-4 rounded-xl mb-8 text-sm flex items-start gap-3">

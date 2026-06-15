@@ -31,66 +31,36 @@ const ActiveSessions: React.FC = () => {
     return () => clearInterval(interval);
   }, []);
 
-  const handleLogoutSession = async (id: string) => {
-    toast((t) => (
-      <div className="flex items-center gap-3">
-        <LogOut size={18} className="text-rose-500 shrink-0" />
-        <p className="font-semibold text-sm">Log out this device?</p>
-        <div className="flex gap-2 ml-2">
-          <button onClick={() => toast.dismiss(t.id)} className="px-3 py-1.5 text-xs font-medium bg-slate-600 rounded-lg text-white">Cancel</button>
-          <button
-            onClick={async () => {
-              toast.dismiss(t.id);
-              setProcessingId(id);
-              try {
-                await deleteSession(id);
-                setSessions(prev => prev.filter(s => s.session_id !== id));
-                if (id === session_id) navigate('/login');
-                toast.success('Session logged out');
-              } catch (e) {
-                toast.error('Failed to logout session');
-              } finally {
-                setProcessingId(null);
-              }
-            }}
-            className="px-3 py-1.5 text-xs font-bold bg-rose-500 text-white rounded-lg"
-          >
-            Log Out
-          </button>
-        </div>
-      </div>
-    ), { duration: 8000 });
+  const [confirmLogoutId, setConfirmLogoutId] = useState<string | null>(null);
+  const [confirmLogoutAll, setConfirmLogoutAll] = useState(false);
+
+  const confirmLogoutSession = async () => {
+    if (!confirmLogoutId) return;
+    const id = confirmLogoutId;
+    setProcessingId(id);
+    try {
+      await deleteSession(id);
+      setSessions(prev => prev.filter(s => s.session_id !== id));
+      if (id === session_id) navigate('/login');
+      toast.success('Session logged out');
+    } catch (e) {
+      toast.error('Failed to logout session');
+    } finally {
+      setProcessingId(null);
+      setConfirmLogoutId(null);
+    }
   };
 
-  const handleLogoutAll = async () => {
-    toast((t) => (
-      <div className="flex items-center gap-3">
-        <ShieldAlert size={18} className="text-rose-500 shrink-0" />
-        <div>
-          <p className="font-semibold text-sm">Log out ALL devices?</p>
-          <p className="text-xs opacity-70">Including this one</p>
-        </div>
-        <div className="flex gap-2 ml-2">
-          <button onClick={() => toast.dismiss(t.id)} className="px-3 py-1.5 text-xs font-medium bg-slate-600 rounded-lg text-white">Cancel</button>
-          <button
-            onClick={async () => {
-              toast.dismiss(t.id);
-              setProcessingId('ALL');
-              try {
-                await logoutAll();
-                navigate('/login');
-              } catch (e) {
-                toast.error('Failed to logout all devices');
-                setProcessingId(null);
-              }
-            }}
-            className="px-3 py-1.5 text-xs font-bold bg-rose-500 text-white rounded-lg"
-          >
-            Log Out All
-          </button>
-        </div>
-      </div>
-    ), { duration: 8000 });
+  const confirmLogoutAllDevices = async () => {
+    setProcessingId('ALL');
+    try {
+      await logoutAll();
+      navigate('/login');
+    } catch (e) {
+      toast.error('Failed to logout all devices');
+      setProcessingId(null);
+      setConfirmLogoutAll(false);
+    }
   };
 
   const getDeviceIcon = (info: string) => {
@@ -158,7 +128,7 @@ const ActiveSessions: React.FC = () => {
                   </div>
 
                   <button
-                    onClick={() => handleLogoutSession(session.session_id)}
+                    onClick={() => setConfirmLogoutId(session.session_id)}
                     disabled={processingId === session.session_id}
                     className="text-slate-400 hover:text-rose-600 p-2.5 rounded-xl hover:bg-rose-50 dark:hover:bg-rose-900/20 transition-colors"
                   >
@@ -171,16 +141,60 @@ const ActiveSessions: React.FC = () => {
         )}
 
         <button
-          onClick={handleLogoutAll}
+          onClick={() => setConfirmLogoutAll(true)}
           disabled={processingId === 'ALL'}
           className="w-full py-3.5 border-2 border-rose-500 text-rose-600 dark:text-rose-400 dark:border-rose-500/50 rounded-2xl font-bold hover:bg-rose-50 dark:hover:bg-rose-900/20 transition-colors flex items-center justify-center"
         >
           {processingId === 'ALL' ? <Loader2 className="animate-spin mr-2" size={20} /> : <LogOut size={20} className="mr-2" />}
           Log Out All Devices
         </button>
-
-
       </div>
+
+      {/* Logout Single Session Modal */}
+      {confirmLogoutId && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/40 dark:bg-black/60 backdrop-blur-sm animate-fade-in">
+          <div className="card-modern shadow-2xl w-full max-w-sm animate-slide-up border border-rose-100 dark:border-rose-900/50">
+            <div className="p-6 text-center space-y-4">
+              <div className="mx-auto w-16 h-16 bg-rose-100 dark:bg-rose-900/50 text-rose-500 rounded-full flex items-center justify-center mb-2 shadow-inner">
+                <LogOut size={28} />
+              </div>
+              <h2 className="text-xl font-black text-slate-900 dark:text-white">Log out device?</h2>
+              <p className="text-slate-500 dark:text-slate-400 text-sm">
+                Are you sure you want to disconnect this device? It will need to log in again.
+              </p>
+            </div>
+            <div className="p-4 border-t border-slate-100 dark:border-slate-800/50 flex gap-3 bg-slate-50/50 dark:bg-slate-800/20">
+              <button onClick={() => setConfirmLogoutId(null)} className="flex-1 btn-secondary !py-2.5">Cancel</button>
+              <button onClick={confirmLogoutSession} disabled={processingId !== null} className="flex-1 px-4 py-2.5 bg-rose-500 hover:bg-rose-600 active:scale-95 transition-all text-white font-bold rounded-xl flex items-center justify-center shadow-lg shadow-rose-500/20">
+                Log Out
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Logout All Sessions Modal */}
+      {confirmLogoutAll && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/40 dark:bg-black/60 backdrop-blur-sm animate-fade-in">
+          <div className="card-modern shadow-2xl w-full max-w-sm animate-slide-up border border-rose-100 dark:border-rose-900/50">
+            <div className="p-6 text-center space-y-4">
+              <div className="mx-auto w-16 h-16 bg-rose-100 dark:bg-rose-900/50 text-rose-500 rounded-full flex items-center justify-center mb-2 shadow-inner">
+                <ShieldAlert size={28} />
+              </div>
+              <h2 className="text-xl font-black text-slate-900 dark:text-white">Log out ALL devices?</h2>
+              <p className="text-slate-500 dark:text-slate-400 text-sm">
+                This will immediately disconnect every device currently logged into your account, including this one.
+              </p>
+            </div>
+            <div className="p-4 border-t border-slate-100 dark:border-slate-800/50 flex gap-3 bg-slate-50/50 dark:bg-slate-800/20">
+              <button onClick={() => setConfirmLogoutAll(false)} className="flex-1 btn-secondary !py-2.5">Cancel</button>
+              <button onClick={confirmLogoutAllDevices} disabled={processingId !== null} className="flex-1 px-4 py-2.5 bg-rose-500 hover:bg-rose-600 active:scale-95 transition-all text-white font-bold rounded-xl flex items-center justify-center shadow-lg shadow-rose-500/20">
+                Log Out All
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </Layout>
   );
 };

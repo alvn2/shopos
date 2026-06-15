@@ -35,6 +35,10 @@ const SettingsPage: React.FC = () => {
   const [changingPassword, setChangingPassword] = useState<string | null>(null);
   const [newPassword, setNewPassword] = useState('');
 
+  // Modal states
+  const [deleteUserTarget, setDeleteUserTarget] = useState<string | null>(null);
+  const [showClearCacheModal, setShowClearCacheModal] = useState(false);
+
   useEffect(() => {
     loadSettings();
     loadUsers();
@@ -122,37 +126,25 @@ const SettingsPage: React.FC = () => {
     }
   };
 
-  const handleDeleteUser = async (username: string) => {
+  const handleDeleteUserClick = (username: string) => {
     if (username === 'admin') {
       toast.error('Cannot delete admin user');
       return;
     }
-    toast((t) => (
-      <div className="flex items-center gap-3">
-        <AlertCircle size={18} className="text-rose-500 shrink-0" />
-        <div>
-          <p className="font-semibold text-sm">Delete user "{username}"?</p>
-        </div>
-        <div className="flex gap-2 ml-2">
-          <button onClick={() => toast.dismiss(t.id)} className="px-3 py-1.5 text-xs font-medium bg-slate-600 rounded-lg text-white">Cancel</button>
-          <button
-            onClick={async () => {
-              toast.dismiss(t.id);
-              try {
-                await api.users.delete(username);
-                loadUsers();
-                toast.success('User deleted');
-              } catch (e) {
-                toast.error('Failed to delete user');
-              }
-            }}
-            className="px-3 py-1.5 text-xs font-bold bg-rose-500 text-white rounded-lg"
-          >
-            Delete
-          </button>
-        </div>
-      </div>
-    ), { duration: 8000 });
+    setDeleteUserTarget(username);
+  };
+
+  const confirmDeleteUser = async () => {
+    if (!deleteUserTarget) return;
+    try {
+      await api.users.delete(deleteUserTarget);
+      loadUsers();
+      toast.success('User deleted');
+    } catch (e) {
+      toast.error('Failed to delete user');
+    } finally {
+      setDeleteUserTarget(null);
+    }
   };
 
   // Calculate landed cost
@@ -424,21 +416,7 @@ const SettingsPage: React.FC = () => {
                 Clear locally cached data. This will NOT delete your actual data (which is in Google Sheets).
               </p>
               <button
-                onClick={() => {
-                  toast((t) => (
-                    <div className="flex items-center gap-3">
-                      <AlertCircle size={18} className="text-amber-500 shrink-0" />
-                      <div>
-                        <p className="font-semibold text-sm">Clear local cache?</p>
-                        <p className="text-xs opacity-70">You'll need to login again.</p>
-                      </div>
-                      <div className="flex gap-2 ml-2">
-                        <button onClick={() => toast.dismiss(t.id)} className="px-3 py-1.5 text-xs font-medium bg-slate-600 rounded-lg text-white">Cancel</button>
-                        <button onClick={() => { toast.dismiss(t.id); localStorage.clear(); window.location.reload(); }} className="px-3 py-1.5 text-xs font-bold bg-amber-500 text-white rounded-lg">Clear</button>
-                      </div>
-                    </div>
-                  ), { duration: 8000 });
-                }}
+                onClick={() => setShowClearCacheModal(true)}
                 className="w-full py-3 bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 rounded-xl font-bold hover:bg-amber-200 dark:hover:bg-amber-900/50 transition-colors"
               >
                 Clear Local Cache & Logout
@@ -447,8 +425,54 @@ const SettingsPage: React.FC = () => {
           </div>
         )}
 
-
       </div>
+
+      {/* Delete User Modal */}
+      {deleteUserTarget && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/40 dark:bg-black/60 backdrop-blur-sm animate-fade-in">
+          <div className="card-modern shadow-2xl w-full max-w-sm animate-slide-up border border-rose-100 dark:border-rose-900/50">
+            <div className="p-6 text-center space-y-4">
+              <div className="mx-auto w-16 h-16 bg-rose-100 dark:bg-rose-900/50 text-rose-500 rounded-full flex items-center justify-center mb-2 shadow-inner">
+                <AlertCircle size={28} />
+              </div>
+              <h2 className="text-xl font-black text-slate-900 dark:text-white">Delete User?</h2>
+              <p className="text-slate-500 dark:text-slate-400 text-sm">
+                Are you sure you want to delete <strong className="text-slate-700 dark:text-slate-200">@{deleteUserTarget}</strong>?
+              </p>
+            </div>
+            <div className="p-4 border-t border-slate-100 dark:border-slate-800/50 flex gap-3 bg-slate-50/50 dark:bg-slate-800/20">
+              <button onClick={() => setDeleteUserTarget(null)} className="flex-1 btn-secondary !py-2.5">Cancel</button>
+              <button onClick={confirmDeleteUser} className="flex-1 px-4 py-2.5 bg-rose-500 hover:bg-rose-600 active:scale-95 transition-all text-white font-bold rounded-xl flex items-center justify-center shadow-lg shadow-rose-500/20">
+                <Trash2 className="mr-2" size={18} />
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Clear Cache Modal */}
+      {showClearCacheModal && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/40 dark:bg-black/60 backdrop-blur-sm animate-fade-in">
+          <div className="card-modern shadow-2xl w-full max-w-sm animate-slide-up border border-amber-100 dark:border-amber-900/50">
+            <div className="p-6 text-center space-y-4">
+              <div className="mx-auto w-16 h-16 bg-amber-100 dark:bg-amber-900/50 text-amber-500 rounded-full flex items-center justify-center mb-2 shadow-inner">
+                <AlertCircle size={28} />
+              </div>
+              <h2 className="text-xl font-black text-slate-900 dark:text-white">Clear Local Cache?</h2>
+              <p className="text-slate-500 dark:text-slate-400 text-sm">
+                This will clear all temporary data stored in your browser. You will need to log in again.
+              </p>
+            </div>
+            <div className="p-4 border-t border-slate-100 dark:border-slate-800/50 flex gap-3 bg-slate-50/50 dark:bg-slate-800/20">
+              <button onClick={() => setShowClearCacheModal(false)} className="flex-1 btn-secondary !py-2.5">Cancel</button>
+              <button onClick={() => { localStorage.clear(); window.location.reload(); }} className="flex-1 px-4 py-2.5 bg-amber-500 hover:bg-amber-600 active:scale-95 transition-all text-white font-bold rounded-xl flex items-center justify-center shadow-lg shadow-amber-500/20">
+                Clear & Logout
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </Layout>
   );
 };
