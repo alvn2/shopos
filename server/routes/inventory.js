@@ -291,9 +291,83 @@ router.delete('/:uuid', requireAdmin, async (req, res) => {
     }
 });
 
-router.post('/bulk-import', requireAdmin, validate('bulkImport', 'body'), async (req, res) => {
-    // Left empty for brevity to save space right now
-    res.status(501).json({ error: 'Not implemented' });
+router.post('/bulk-import', requireAdmin, async (req, res) => {
+    try {
+        const { shop_id, username } = req.user;
+        const items = req.body;
+
+        if (!Array.isArray(items) || items.length === 0) {
+            return res.status(400).json({ error: 'Invalid items array' });
+        }
+
+        let successCount = 0;
+        let updateCount = 0;
+
+        await prisma.$transaction(async (tx) => {
+            for (const item of items) {
+                if (!item.part_number || !item.name || !item.make) continue;
+
+                const existing = await tx.inventoryItem.findUnique({
+                    where: { shop_id_part_number: { shop_id, part_number: item.part_number } }
+                });
+
+                if (existing) {
+                    await tx.inventoryItem.update({
+                        where: { shop_id_part_number: { shop_id, part_number: item.part_number } },
+                        data: {
+                            name: item.name,
+                            make: item.make,
+                            tags: item.tags || existing.tags,
+                            aed_buying_price: item.aed_buying_price !== undefined ? parseFloat(item.aed_buying_price) : existing.aed_buying_price,
+                            ksh_buying_price: item.ksh_buying_price !== undefined ? parseFloat(item.ksh_buying_price) : existing.ksh_buying_price,
+                            selling_price: item.selling_price !== undefined ? parseFloat(item.selling_price) : existing.selling_price,
+                            stock_qty: item.stock_qty !== undefined ? parseInt(item.stock_qty) : existing.stock_qty,
+                            min_stock: item.min_stock !== undefined ? parseInt(item.min_stock) : existing.min_stock,
+                            updated_by: username,
+                            is_deleted: false,
+                            deleted_at: null,
+                            deleted_by: null
+                        }
+                    });
+                    updateCount++;
+                } else {
+                    await tx.inventoryItem.create({
+                        data: {
+                            shop_id,
+                            part_number: item.part_number,
+                            name: item.name,
+                            make: item.make,
+                            tags: item.tags || '',
+                            aed_buying_price: item.aed_buying_price ? parseFloat(item.aed_buying_price) : 0,
+                            ksh_buying_price: item.ksh_buying_price ? parseFloat(item.ksh_buying_price) : 0,
+                            selling_price: item.selling_price ? parseFloat(item.selling_price) : 0,
+                            stock_qty: item.stock_qty ? parseInt(item.stock_qty) : 0,
+                            min_stock: item.min_stock ? parseInt(item.min_stock) : 5,
+                            updated_by: username
+                        }
+                    });
+                    successCount++;
+                }
+            }
+
+            await tx.auditLog.create({
+                data: {
+                    shop_id,
+                    user: username,
+                    action: 'INVENTORY_BULK_IMPORT',
+                    details: JSON.stringify({ entityType: 'INVENTORY', added: successCount, updated: updateCount }),
+                    ip_address: req.ip || 'unknown'
+                }
+            });
+        });
+
+        await redisCache.invalidatePattern(`inventory:${shop_id}:*`);
+
+        res.json({ message: 'Bulk import successful', added: successCount, updated: updateCount });
+    } catch (error) {
+        console.error('Bulk import error:', error);
+        res.status(500).json({ error: 'Failed to process bulk import' });
+    }
 });
 
 async function logAudit(shop_id, user, action, entityType, entityId, oldValue, newValue, req) {

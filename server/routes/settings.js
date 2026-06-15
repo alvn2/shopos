@@ -25,21 +25,23 @@ router.get('/', async (req, res) => {
             return res.json(cached);
         }
 
-        const settingsRows = await prisma.setting.findMany({ where: { shop_id } });
+        let settings = await prisma.settings.findUnique({ where: { shop_id } });
 
-        const settings = {};
-        settingsRows.forEach(row => {
-            try {
-                settings[row.key] = JSON.parse(row.value);
-            } catch {
-                settings[row.key] = row.value;
-            }
-        });
+        if (!settings) {
+            settings = await prisma.settings.create({
+                data: {
+                    shop_id,
+                    aed_rate: 36.5,
+                    conversion_percent: 13.0,
+                    default_min_stock: 5
+                }
+            });
+        }
 
         const result = {
-            aed_rate: parseFloat(settings.aed_rate || settings.aed_exchange_rate || 36.5),
-            conversion_percent: parseFloat(settings.conversion_percent || 13),
-            default_min_stock: parseInt(settings.default_min_stock || 5)
+            aed_rate: settings.aed_rate,
+            conversion_percent: settings.conversion_percent,
+            default_min_stock: settings.default_min_stock
         };
 
         cache.set(cacheKey, result, SETTINGS_CACHE_TTL);
@@ -59,35 +61,43 @@ router.put('/', requireAdmin, async (req, res) => {
         const { shop_id, username } = req.user;
         const updates = req.body;
 
-        await prisma.$transaction(async (tx) => {
-            for (const [key, value] of Object.entries(updates)) {
-                const valueStr = typeof value === 'object' ? JSON.stringify(value) : String(value);
-                
-                await tx.setting.upsert({
-                    where: { shop_id_key: { shop_id, key } },
-                    update: { value: valueStr, updated_by: username },
-                    create: { shop_id, key, value: valueStr, updated_by: username }
-                });
-            }
+        const aed_rate = updates.aed_rate ? parseFloat(updates.aed_rate) : undefined;
+        const conversion_percent = updates.conversion_percent ? parseFloat(updates.conversion_percent) : undefined;
+        const default_min_stock = updates.default_min_stock ? parseInt(updates.default_min_stock) : undefined;
 
-            await tx.auditLog.create({
-                data: {
-                    shop_id,
-                    user: username,
-                    action: 'SETTINGS_UPDATED',
-                    details: JSON.stringify({ entityType: 'SETTINGS', newValue: updates }),
-                    ip_address: req.ip || 'unknown'
-                }
-            });
+        const updatedSettings = await prisma.settings.upsert({
+            where: { shop_id },
+            update: {
+                ...(aed_rate !== undefined && { aed_rate }),
+                ...(conversion_percent !== undefined && { conversion_percent }),
+                ...(default_min_stock !== undefined && { default_min_stock })
+            },
+            create: {
+                shop_id,
+                aed_rate: aed_rate !== undefined ? aed_rate : 36.5,
+                conversion_percent: conversion_percent !== undefined ? conversion_percent : 13.0,
+                default_min_stock: default_min_stock !== undefined ? default_min_stock : 5
+            }
         });
+
+        await prisma.auditLog.create({
+            data: {
+                shop_id,
+                user: username,
+                action: 'SETTINGS_UPDATED',
+                details: JSON.stringify({ entityType: 'SETTINGS', newValue: updates }),
+                ip_address: req.ip || 'unknown'
+            }
+        });
+
+        const result = {
+            aed_rate: updatedSettings.aed_rate,
+            conversion_percent: updatedSettings.conversion_percent,
+            default_min_stock: updatedSettings.default_min_stock
+        };
 
         cache.invalidate(`settings:${shop_id}`);
-
-        res.json({
-            aed_rate: parseFloat(updates.aed_rate || 36.5),
-            conversion_percent: parseFloat(updates.conversion_percent || 13),
-            default_min_stock: parseInt(updates.default_min_stock || 5)
-        });
+        res.json(result);
     } catch (error) {
         console.error('Update settings error:', error);
         res.status(500).json({ error: 'Failed to update settings' });
