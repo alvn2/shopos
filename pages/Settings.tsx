@@ -220,7 +220,6 @@ const SettingsPage: React.FC = () => {
             {/* Rate Settings */}
             <div className="card-modern p-5 lg:p-6 space-y-5">
               <h3 className="font-bold text-lg text-slate-900 dark:text-white">Conversion Rates</h3>
-              </div>
 
               <div className="space-y-1.5">
                 <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider pl-1">Default Min Stock Alert</label>
