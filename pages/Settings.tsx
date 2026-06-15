@@ -160,11 +160,12 @@ const SettingsPage: React.FC = () => {
 
   const isCarWorld = user?.shop_id === 'CARWORLD';
 
-  const tabs: { id: TabType; label: string; icon: React.ReactNode }[] = [
+  const allTabs: { id: TabType; label: string; icon: React.ReactNode }[] = [
     { id: 'rates', label: 'Rates', icon: <Calculator size={18} /> },
     { id: 'users', label: 'Users', icon: <Users size={18} /> },
     { id: 'system', label: 'System', icon: <SettingsIcon size={18} /> }
-  ].filter(tab => !(isCarWorld && tab.id === 'rates'));
+  ];
+  const tabs = allTabs.filter(tab => !(isCarWorld && tab.id === 'rates'));
 
   return (
     <Layout title="Settings">
