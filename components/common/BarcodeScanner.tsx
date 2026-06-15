@@ -38,11 +38,33 @@ const BarcodeScanner: React.FC<BarcodeScannerProps> = ({ onScan, label = 'Scan B
                 return;
             }
 
+            if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                setError('Camera access requires HTTPS or localhost. If you are on a local network, use a tunnel like ngrok.');
+                setCameraOpen(false);
+                return;
+            }
+
+            const cameras = await Html5Qrcode.getCameras();
+            if (!cameras || cameras.length === 0) {
+                setError('No camera found on this device.');
+                setCameraOpen(false);
+                return;
+            }
+
+            // Prefer back camera
+            let targetCameraId = cameras[0].id;
+            for (const camera of cameras) {
+                if (camera.label.toLowerCase().includes('back') || camera.label.toLowerCase().includes('rear') || camera.label.toLowerCase().includes('environment')) {
+                    targetCameraId = camera.id;
+                    break;
+                }
+            }
+
             const html5QrCode = new Html5Qrcode('barcode-reader');
             scannerRef.current = html5QrCode;
 
             await html5QrCode.start(
-                { facingMode: 'environment' }, // Rear camera
+                targetCameraId,
                 {
                     fps: 10,
                     qrbox: { width: 280, height: 120 },
