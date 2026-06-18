@@ -1,17 +1,36 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import Layout from '../components/common/Layout';
 import { useInventory } from '../contexts/InventoryContext';
-import { AlertTriangle, Package, Download, MessageCircle, ArrowUpDown, RefreshCw, FileSpreadsheet } from 'lucide-react';
+import { api } from '../services/api';
+import { InventoryItem } from '../types';
+import { AlertTriangle, Package, MessageCircle, ArrowUpDown, RefreshCw, FileSpreadsheet } from 'lucide-react';
 import * as XLSX from 'xlsx';
+import { toast } from 'react-hot-toast';
 
 const LowStock: React.FC = () => {
-    const { items, loading, refreshInventory } = useInventory();
+    const [items, setItems] = useState<InventoryItem[]>([]);
+    const [loading, setLoading] = useState(true);
     const [sortBy, setSortBy] = useState<'stock' | 'name' | 'part'>('stock');
     const [sortAsc, setSortAsc] = useState(true);
 
+    const fetchLowStock = async () => {
+        setLoading(true);
+        try {
+            const res = await api.inventory.getPaginated(1, 2000, '', true);
+            setItems(res.items);
+        } catch (err) {
+            toast.error('Failed to load low stock items');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        fetchLowStock();
+    }, []);
+
     const lowStockItems = useMemo(() => {
-        const filtered = items.filter(item => item.stock_qty <= item.min_stock);
-        return filtered.sort((a, b) => {
+        return [...items].sort((a, b) => {
             let comparison = 0;
             if (sortBy === 'stock') comparison = a.stock_qty - b.stock_qty;
             else if (sortBy === 'name') comparison = a.name.localeCompare(b.name);
@@ -28,7 +47,7 @@ const LowStock: React.FC = () => {
         else { setSortBy(field); setSortAsc(true); }
     };
 
-    const handleReorder = (item: typeof items[0]) => {
+    const handleReorder = (item: InventoryItem) => {
         const suggestedQty = item.min_stock * 2;
         const message = encodeURIComponent(
             `Hi, I need to reorder:\n\nPart: ${item.part_number}\nName: ${item.name}\nQuantity: ${suggestedQty}\nCurrent Stock: ${item.stock_qty}`
@@ -86,7 +105,7 @@ const LowStock: React.FC = () => {
 
                 {/* Action Buttons */}
                 <div className="flex gap-3">
-                    <button onClick={refreshInventory} className="flex-1 btn-secondary flex items-center justify-center gap-2">
+                    <button onClick={fetchLowStock} className="flex-1 btn-secondary flex items-center justify-center gap-2">
                         <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
                         Refresh
                     </button>
