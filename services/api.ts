@@ -99,7 +99,9 @@ async function fetchAPI<T>(
         if (error.details && Array.isArray(error.details)) {
           errorMessage += `: ${error.details.join(', ')}`;
         }
-        throw new Error(errorMessage);
+        const err = new Error(errorMessage);
+        (err as any).status = response.status;
+        throw err;
       }
 
       return response.json();
@@ -115,6 +117,10 @@ async function fetchAPI<T>(
       }
 
       if (error.message?.includes('Session expired') || error.message?.includes('401')) {
+        throw error;
+      }
+
+      if (error.status && !RETRY_CONFIG.retryStatusCodes.includes(error.status)) {
         throw error;
       }
 

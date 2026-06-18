@@ -38,16 +38,24 @@ const SalesHistory: React.FC = () => {
     const fetchSales = async () => {
         setLoading(true);
         try {
-            const data = await api.sales.getAll();
-            setSales(data);
+            const data = await api.sales.getAll() as any;
+            if (Array.isArray(data)) {
+                setSales(data);
+            } else if (data && Array.isArray(data.sales)) {
+                setSales(data.sales);
+            } else {
+                setSales([]);
+            }
         } catch (error) {
             console.error('Failed to fetch sales:', error);
+            setSales([]);
         } finally {
             setLoading(false);
         }
     };
 
     const filteredSales = useMemo(() => {
+        if (!Array.isArray(sales)) return [];
         return sales.filter(sale => {
             if (searchTerm) {
                 const s = searchTerm.toLowerCase();

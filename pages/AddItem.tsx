@@ -75,6 +75,9 @@ const AddItem: React.FC = () => {
                     return itemPN === normalizedPN && itemMake === normalizedMake;
                 });
                 setExistingMatch(exact || null);
+                if (exact) {
+                    setMinStock(exact.min_stock.toString());
+                }
 
                 const others = results.filter(item => {
                     const itemPN = item.part_number.replace(/[\s\-\/]/g, '').toUpperCase();
@@ -153,8 +156,8 @@ const AddItem: React.FC = () => {
                 if (tags.trim() && tags.trim() !== existingMatch.tags) {
                     updatedFields.tags = tags.trim();
                 }
-                if (parseInt(minStock) !== existingMatch.min_stock) {
-                    updatedFields.min_stock = parseInt(minStock) || 5;
+                if (parseInt(minStock) >= 0 && parseInt(minStock) !== existingMatch.min_stock) {
+                    updatedFields.min_stock = parseInt(minStock);
                 }
 
 
@@ -193,7 +196,7 @@ const AddItem: React.FC = () => {
                     ksh_buying_price: parseFloat(kshBuyingPrice) || 0,
                     selling_price: parseFloat(sellingPrice),
                     stock_qty: parseInt(stockQty) || 0,
-                    min_stock: parseInt(minStock) || 5,
+                    min_stock: parseInt(minStock) >= 0 ? parseInt(minStock) : 5,
                     last_updated: new Date().toISOString(),
                     updated_by: user?.username || 'unknown'
                 };

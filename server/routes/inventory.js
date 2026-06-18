@@ -184,7 +184,7 @@ router.post('/', requireAdmin, validate('inventoryItem', 'body'), async (req, re
                 ksh_buying_price: ksh_buying_price || 0,
                 selling_price: selling_price || 0,
                 stock_qty: stock_qty || 0,
-                min_stock: min_stock || 5,
+                min_stock: min_stock !== undefined && min_stock !== null ? min_stock : 5,
                 updated_by: req.user.username
             }
         });
@@ -366,7 +366,7 @@ router.post('/bulk-import', requireAdmin, async (req, res) => {
                                 ksh_buying_price: item.ksh_buying_price !== undefined ? parseFloat(item.ksh_buying_price) : existing.ksh_buying_price,
                                 selling_price: item.selling_price !== undefined ? parseFloat(item.selling_price) : existing.selling_price,
                                 stock_qty: item.stock_qty !== undefined ? parseInt(item.stock_qty) : existing.stock_qty,
-                                min_stock: item.min_stock !== undefined ? parseInt(item.min_stock) : existing.min_stock,
+                                min_stock: item.min_stock !== undefined && item.min_stock !== null && item.min_stock !== "" ? parseInt(item.min_stock) : existing.min_stock,
                                 updated_by: username,
                                 is_deleted: false,
                                 deleted_at: null,
@@ -386,7 +386,7 @@ router.post('/bulk-import', requireAdmin, async (req, res) => {
                         ksh_buying_price: item.ksh_buying_price ? parseFloat(item.ksh_buying_price) : 0,
                         selling_price: item.selling_price ? parseFloat(item.selling_price) : 0,
                         stock_qty: item.stock_qty ? parseInt(item.stock_qty) : 0,
-                        min_stock: item.min_stock ? parseInt(item.min_stock) : 5,
+                        min_stock: item.min_stock !== undefined && item.min_stock !== null && item.min_stock !== "" ? parseInt(item.min_stock) : 5,
                         updated_by: username
                     });
                     successCount++;
