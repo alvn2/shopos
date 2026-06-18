@@ -441,7 +441,6 @@ const Inventory: React.FC = () => {
                       onAdjust={handleAdjust}
                       onEdit={openEditModal}
                       onDelete={handleDeleteClick}
-                      onPrintBarcode={setBarcodeItem}
                     />
                   </div>
                 );
