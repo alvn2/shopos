@@ -9,9 +9,7 @@ import { InventoryItem, PartMake, UserRole } from '../types';
 import { Minus, Plus, Save, RotateCcw, Package, Search, Trash2, Edit2, X, Calculator, Upload, ChevronLeft, ChevronRight, AlertTriangle, QrCode } from 'lucide-react';
 import { api } from '../services/api';
 import { Toaster, toast } from 'react-hot-toast';
-
-const ITEMS_PER_PAGE = 50;
-
+import { Virtuoso } from 'react-virtuoso';
 // Memoized inventory row to prevent unnecessary re-renders
 const InventoryRow = memo<{
   item: InventoryItem;
@@ -166,7 +164,6 @@ const Inventory: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [showBulkImport, setShowBulkImport] = useState(false);
-  const [currentPage, setCurrentPage] = useState(1);
   const [isPending, startTransition] = useTransition();
 
   // Settings
@@ -225,7 +222,6 @@ const Inventory: React.FC = () => {
     const timer = setTimeout(() => {
       startTransition(() => {
         setDebouncedSearch(searchTerm);
-        setCurrentPage(1); // Reset to page 1 on new search
       });
     }, 300);
     return () => clearTimeout(timer);
@@ -353,12 +349,6 @@ const Inventory: React.FC = () => {
     });
   }, [localItems, debouncedSearch, filter]);
 
-  const totalPages = Math.ceil(filteredList.length / ITEMS_PER_PAGE);
-  const paginatedList = useMemo(() => {
-    const start = (currentPage - 1) * ITEMS_PER_PAGE;
-    return filteredList.slice(start, start + ITEMS_PER_PAGE);
-  }, [filteredList, currentPage]);
-
   const lowStockCount = items.filter(i => i.stock_qty <= i.min_stock && i.stock_qty > 0).length;
   const outOfStockCount = items.filter(i => i.stock_qty === 0).length;
 
@@ -427,13 +417,13 @@ const Inventory: React.FC = () => {
           </div>
 
           <div className="flex bg-slate-100/50 dark:bg-slate-800/50 rounded-xl p-1 gap-1 relative overflow-hidden">
-            <button onClick={() => startTransition(() => { setFilter('all'); setCurrentPage(1); })} className={`flex-1 py-2.5 px-4 rounded-lg text-sm font-semibold transition-all duration-300 ${filter === 'all' ? 'bg-white text-slate-900 dark:bg-slate-700 dark:text-white shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'}`}>
+            <button onClick={() => startTransition(() => { setFilter('all'); })} className={`flex-1 py-2.5 px-4 rounded-lg text-sm font-semibold transition-all duration-300 ${filter === 'all' ? 'bg-white text-slate-900 dark:bg-slate-700 dark:text-white shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'}`}>
               All Items
             </button>
-            <button onClick={() => startTransition(() => { setFilter('low'); setCurrentPage(1); })} className={`flex-1 py-2.5 px-4 rounded-lg text-sm font-semibold transition-all duration-300 ${filter === 'low' ? 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200 shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'}`}>
+            <button onClick={() => startTransition(() => { setFilter('low'); })} className={`flex-1 py-2.5 px-4 rounded-lg text-sm font-semibold transition-all duration-300 ${filter === 'low' ? 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200 shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'}`}>
               Low Stock
             </button>
-            <button onClick={() => startTransition(() => { setFilter('out'); setCurrentPage(1); })} className={`flex-1 py-2.5 px-4 rounded-lg text-sm font-semibold transition-all duration-300 ${filter === 'out' ? 'bg-rose-100 text-rose-800 dark:bg-rose-900/40 dark:text-rose-200 shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'}`}>
+            <button onClick={() => startTransition(() => { setFilter('out'); })} className={`flex-1 py-2.5 px-4 rounded-lg text-sm font-semibold transition-all duration-300 ${filter === 'out' ? 'bg-rose-100 text-rose-800 dark:bg-rose-900/40 dark:text-rose-200 shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'}`}>
               Out of Stock
             </button>
             {isPending && <div className="absolute inset-x-0 bottom-0 h-0.5 bg-brand-500 animate-pulse"></div>}
@@ -455,56 +445,37 @@ const Inventory: React.FC = () => {
               </p>
             </div>
           ) : (
-            paginatedList.map(item => {
-              const isModified = modifiedIds.has(item.uuid);
-              const original = items.find(i => i.uuid === item.uuid);
-              const landedCostKES = calcLandedCost(item.aed_buying_price);
-              const profitMargin = landedCostKES > 0 ? Math.round((item.selling_price - landedCostKES) / landedCostKES * 100) : 0;
+            <Virtuoso
+              useWindowScroll
+              data={filteredList}
+              itemContent={(index, item) => {
+                const isModified = modifiedIds.has(item.uuid);
+                const original = items.find(i => i.uuid === item.uuid);
+                const landedCostKES = calcLandedCost(item.aed_buying_price);
+                const profitMargin = landedCostKES > 0 ? Math.round((item.selling_price - landedCostKES) / landedCostKES * 100) : 0;
 
-              return (
-                <InventoryRow
-                  key={item.uuid}
-                  item={item}
-                  original={original}
-                  isModified={isModified}
-                  isAdmin={isAdmin}
-                  isWorker={isWorker}
-                  showAED={showAED}
-                  landedCostKES={landedCostKES}
-                  profitMargin={profitMargin}
-                  onAdjust={handleAdjust}
-                  onEdit={openEditModal}
-                  onDelete={handleDeleteClick}
-                  onPrintBarcode={setBarcodeItem}
-                />
-              );
-            })
+                return (
+                  <div className="pb-3">
+                    <InventoryRow
+                      item={item}
+                      original={original}
+                      isModified={isModified}
+                      isAdmin={isAdmin}
+                      isWorker={isWorker}
+                      showAED={showAED}
+                      landedCostKES={landedCostKES}
+                      profitMargin={profitMargin}
+                      onAdjust={handleAdjust}
+                      onEdit={openEditModal}
+                      onDelete={handleDeleteClick}
+                      onPrintBarcode={setBarcodeItem}
+                    />
+                  </div>
+                );
+              }}
+            />
           )}
         </div>
-
-        {/* Pagination */}
-        {totalPages > 1 && (
-          <div className="flex items-center justify-center gap-4 py-4">
-            <button
-              onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-              disabled={currentPage === 1}
-              className="p-2.5 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 disabled:opacity-30 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
-            >
-              <ChevronLeft size={18} />
-            </button>
-            <div className="text-sm font-semibold text-slate-600 dark:text-slate-300">
-              Page <span className="text-slate-900 dark:text-white">{currentPage}</span> of <span className="text-slate-900 dark:text-white">{totalPages}</span>
-              <span className="text-slate-400 ml-2">({filteredList.length} items)</span>
-            </div>
-            <button
-              onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-              disabled={currentPage === totalPages}
-              className="p-2.5 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 disabled:opacity-30 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
-            >
-              <ChevronRight size={18} />
-            </button>
-          </div>
-        )}
 
         {/* Sticky Save Bar */}
         {modifiedIds.size > 0 && (

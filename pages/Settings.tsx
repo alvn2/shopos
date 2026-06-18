@@ -314,7 +314,7 @@ const SettingsPage: React.FC = () => {
                         <button onClick={() => handleToggleUser(u.username, u.is_active !== false)} className="btn-secondary !py-2.5 !text-sm">
                           {u.is_active !== false ? 'Disable' : 'Enable'}
                         </button>
-                        <button onClick={() => handleDeleteUser(u.username)} className="py-2.5 px-3 bg-rose-100 dark:bg-rose-900/30 text-rose-600 dark:text-rose-400 rounded-xl text-sm hover:bg-rose-200 dark:hover:bg-rose-900/50 transition-colors">
+                        <button onClick={() => handleDeleteUserClick(u.username)} className="py-2.5 px-3 bg-rose-100 dark:bg-rose-900/30 text-rose-600 dark:text-rose-400 rounded-xl text-sm hover:bg-rose-200 dark:hover:bg-rose-900/50 transition-colors">
                           <Trash2 size={16} />
                         </button>
                       </>

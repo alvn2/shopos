@@ -5,6 +5,7 @@ const sessionService = require('../services/session');
 const { authenticateSession } = require('../middleware/auth');
 const { bruteForceProtection } = require('../middleware/security');
 const { validate } = require('../middleware/validation');
+const { logAudit } = require('../services/audit');
 
 const router = express.Router();
 
@@ -156,22 +157,5 @@ router.get('/verify', authenticateSession, async (req, res) => {
         user: req.user
     });
 });
-
-async function logAudit(shop_id, user, action, entityType, entityId, oldValue, newValue, req) {
-    try {
-        const ipAddress = req?.ip || req?.headers?.['x-forwarded-for'] || 'unknown';
-        await prisma.auditLog.create({
-            data: {
-                shop_id: shop_id || 'STEPMOTORS', // Fallback for failed logins where shop is unknown
-                user: user || 'anonymous',
-                action: action,
-                details: JSON.stringify({ entityType, entityId, oldValue, newValue }),
-                ip_address: ipAddress
-            }
-        });
-    } catch (error) {
-        console.error('Audit log error:', error);
-    }
-}
 
 module.exports = router;

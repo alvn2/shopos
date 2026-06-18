@@ -4,6 +4,7 @@ const { prisma } = require('../services/prisma');
 const redisCache = require('../services/redisCache');
 const { authenticateSession, requireAdmin, requireCounterOrAdmin } = require('../middleware/auth');
 const { validate } = require('../middleware/validation');
+const { logAudit } = require('../services/audit');
 
 const router = express.Router();
 const CACHE_TTL = 30000; // 30 seconds
@@ -22,8 +23,12 @@ router.get('/', async (req, res) => {
     try {
         const { shop_id } = req.user;
         const { page, limit, search, sort_by, sort_order, low_stock } = req.query;
-        const pageNum = parseInt(page) || 1;
-        const limitNum = parseInt(limit) || 0;
+        const pageNum = Math.max(1, parseInt(page) || 1);
+        let limitNum = parseInt(limit);
+        
+        // Safety bounds for pagination
+        if (isNaN(limitNum) || limitNum <= 0) limitNum = 50; // Default to 50
+        if (limitNum > 1000) limitNum = 1000; // Cap at 1000
 
         const cacheKey = getCacheKey(shop_id, pageNum, limitNum, search, sort_by, sort_order, low_stock);
 
@@ -34,6 +39,7 @@ router.get('/', async (req, res) => {
         }
 
         const where = { shop_id, is_deleted: false };
+        const isLowStockFilter = low_stock === 'true';
 
         if (search) {
             where.OR = [
@@ -43,18 +49,51 @@ router.get('/', async (req, res) => {
             ];
         }
 
-        const items = await prisma.inventoryItem.findMany({
-            where,
-            orderBy: sort_by ? { [sort_by]: sort_order === 'desc' ? 'desc' : 'asc' } : { last_updated: 'desc' }
-        });
+        // Low stock filter: Prisma doesn't support column-to-column comparison,
+        // so we use raw SQL for this specific case
+        if (isLowStockFilter) {
+            const rawItems = await prisma.$queryRaw`
+                SELECT * FROM "InventoryItem"
+                WHERE shop_id = ${shop_id}::"ShopName"
+                  AND is_deleted = false
+                  AND stock_qty <= min_stock
+                ORDER BY last_updated DESC
+            `;
 
-        let activeItems = items;
+            const transformed = rawItems.map(item => ({
+                uuid: item.uuid,
+                part_number: item.part_number,
+                name: item.name,
+                tags: item.tags || '',
+                make: item.make || 'Genuine',
+                aed_buying_price: item.aed_buying_price,
+                ksh_buying_price: item.ksh_buying_price,
+                selling_price: item.selling_price,
+                stock_qty: item.stock_qty,
+                min_stock: item.min_stock,
+                last_updated: item.last_updated,
+                updated_by: item.updated_by
+            }));
 
-        if (low_stock === 'true') {
-            activeItems = activeItems.filter(item => item.stock_qty <= item.min_stock);
+            res.set('X-Cache', 'MISS');
+            return res.json(transformed);
         }
 
-        let transformed = activeItems.map(item => ({
+        const queryOpts = {
+            where,
+            orderBy: sort_by ? { [sort_by]: sort_order === 'desc' ? 'desc' : 'asc' } : { last_updated: 'desc' }
+        };
+
+        const total = await prisma.inventoryItem.count({ where });
+
+        if (limitNum > 0) {
+            queryOpts.skip = (pageNum - 1) * limitNum;
+            queryOpts.take = limitNum;
+        }
+
+        const items = await prisma.inventoryItem.findMany(queryOpts);
+
+        const transformed = items.map(item => ({
             uuid: item.uuid,
             part_number: item.part_number,
             name: item.name,
@@ -69,12 +108,7 @@ router.get('/', async (req, res) => {
             updated_by: item.updated_by
         }));
 
-        const total = transformed.length;
-
         if (limitNum > 0) {
-            const offset = (pageNum - 1) * limitNum;
-            transformed = transformed.slice(offset, offset + limitNum);
-
             const result = {
                 items: transformed,
                 total,
@@ -369,22 +403,5 @@ router.post('/bulk-import', requireAdmin, async (req, res) => {
         res.status(500).json({ error: 'Failed to process bulk import' });
     }
 });
-
-async function logAudit(shop_id, user, action, entityType, entityId, oldValue, newValue, req) {
-    try {
-        const ipAddress = req?.ip || req?.headers?.['x-forwarded-for'] || 'unknown';
-        await prisma.auditLog.create({
-            data: {
-                shop_id: shop_id,
-                user: user || 'anonymous',
-                action: action,
-                details: JSON.stringify({ entityType, entityId, oldValue, newValue }),
-                ip_address: ipAddress
-            }
-        });
-    } catch (error) {
-        console.error('Audit log error:', error);
-    }
-}
 
 module.exports = router;

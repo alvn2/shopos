@@ -1,6 +1,7 @@
 const express = require('express');
 const { prisma } = require('../services/prisma');
 const { authenticateSession, requireCounterOrAdmin } = require('../middleware/auth');
+const { logAudit } = require('../services/audit');
 
 const router = express.Router();
 
@@ -151,7 +152,7 @@ router.get('/:id/ledger', async (req, res) => {
         const { shop_id } = req.user;
         const { id } = req.params;
         
-        const entries = await prisma.customerLedger.findMany({
+        const entries = await prisma.customerLedgerEntry.findMany({
             where: { customer_id: id, shop_id },
             orderBy: { date: 'desc' }
         });
@@ -198,7 +199,7 @@ router.post('/:id/payment', requireCounterOrAdmin, async (req, res) => {
             const currentCredit = customer.total_credit;
             const newCredit = Math.max(0, currentCredit - amount);
 
-            const ledgerEntry = await tx.customerLedger.create({
+            const ledgerEntry = await tx.customerLedgerEntry.create({
                 data: {
                     shop_id,
                     customer_id: id,
@@ -266,7 +267,7 @@ router.post('/:id/credit', requireCounterOrAdmin, async (req, res) => {
             const currentPurchases = customer.total_purchases;
             const newCredit = currentCredit + amount;
 
-            const ledgerEntry = await tx.customerLedger.create({
+            const ledgerEntry = await tx.customerLedgerEntry.create({
                 data: {
                     shop_id,
                     customer_id: id,
@@ -299,22 +300,5 @@ router.post('/:id/credit', requireCounterOrAdmin, async (req, res) => {
         res.status(error.message === 'Customer not found' ? 404 : 500).json({ error: error.message || 'Failed to add credit' });
     }
 });
-
-async function logAudit(shop_id, user, action, entityType, entityId, oldValue, newValue, req) {
-    try {
-        const ipAddress = req?.ip || req?.headers?.['x-forwarded-for'] || 'unknown';
-        await prisma.auditLog.create({
-            data: {
-                shop_id,
-                user: user || 'anonymous',
-                action,
-                details: JSON.stringify({ entityType, entityId, oldValue, newValue }),
-                ip_address: ipAddress
-            }
-        });
-    } catch (error) {
-        console.error('Audit log error:', error);
-    }
-}
 
 module.exports = router;

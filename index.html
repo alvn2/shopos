@@ -41,17 +41,5 @@
   <body class="bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 transition-colors duration-300">
     <div id="root"></div>
   <script type="module" src="/index.tsx"></script>
-  <script>
-    // Register Service Worker for PWA/offline support
-    if ('serviceWorker' in navigator) {
-      window.addEventListener('load', function() {
-        navigator.serviceWorker.register('/sw.js').then(function(reg) {
-          console.log('[ShopOS] Service Worker registered:', reg.scope);
-        }).catch(function(err) {
-          console.log('[ShopOS] Service Worker registration failed:', err);
-        });
-      });
-    }
-  </script>
 </body>
 </html>

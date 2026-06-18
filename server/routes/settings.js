@@ -1,9 +1,10 @@
 const express = require('express');
 const bcrypt = require('bcryptjs');
 const { prisma } = require('../services/prisma');
-const cache = require('../services/cache');
+const redisCache = require('../services/redisCache');
 const { authenticateSession, requireAdmin } = require('../middleware/auth');
 const { validatePasswordStrength } = require('../middleware/validation');
+const { logAudit } = require('../services/audit');
 
 const router = express.Router();
 
@@ -19,7 +20,7 @@ router.get('/', async (req, res) => {
         const { shop_id } = req.user;
         const cacheKey = `settings:${shop_id}`;
         
-        const cached = cache.get(cacheKey);
+        const cached = await redisCache.getCache(cacheKey);
         if (cached) {
             res.set('X-Cache', 'HIT');
             return res.json(cached);
@@ -44,7 +45,7 @@ router.get('/', async (req, res) => {
             default_min_stock: settings.default_min_stock
         };
 
-        cache.set(cacheKey, result, SETTINGS_CACHE_TTL);
+        await redisCache.setCache(cacheKey, result, SETTINGS_CACHE_TTL / 1000);
         res.set('X-Cache', 'MISS');
         res.json(result);
     } catch (error) {
@@ -96,7 +97,7 @@ router.put('/', requireAdmin, async (req, res) => {
             default_min_stock: updatedSettings.default_min_stock
         };
 
-        cache.invalidate(`settings:${shop_id}`);
+        await redisCache.clearCache(`settings:${shop_id}`);
         res.json(result);
     } catch (error) {
         console.error('Update settings error:', error);
@@ -254,22 +255,5 @@ router.delete('/users/:uuid', requireAdmin, async (req, res) => {
         res.status(500).json({ error: 'Failed to delete user' });
     }
 });
-
-async function logAudit(shop_id, user, action, entityType, entityId, oldValue, newValue, req) {
-    try {
-        const ipAddress = req?.ip || req?.headers?.['x-forwarded-for'] || 'unknown';
-        await prisma.auditLog.create({
-            data: {
-                shop_id,
-                user: user || 'anonymous',
-                action,
-                details: JSON.stringify({ entityType, entityId, oldValue, newValue }),
-                ip_address: ipAddress
-            }
-        });
-    } catch (error) {
-        console.error('Audit log error:', error);
-    }
-}
 
 module.exports = router;

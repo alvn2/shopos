@@ -68,13 +68,19 @@ model InventoryItem {
   deleted_by       String?
 
   @@unique([shop_id, part_number])
+  @@index([part_number])
+  @@index([name])
+  @@index([tags])
+  
+  sale_items       SaleItem[]
 }
 
 model Sale {
   uuid            String    @id @default(uuid()) @db.Uuid
   shop_id         ShopName
   batch_id        String
-  items_json      String    // Storing items as JSON to match original architecture easily
+  items_json      String?   // Kept for backward compatibility during transition
+  items           SaleItem[]
   total_kes       Float
   payment_method  String
   customer_name   String?
@@ -88,6 +94,9 @@ model Sale {
   
   user            User      @relation(fields: [sold_by], references: [uuid])
   customer        Customer? @relation(fields: [customer_id], references: [uuid])
+
+  @@index([date])
+  @@index([shop_id, date])
 }
 
 model Customer {
@@ -122,6 +131,21 @@ model CustomerLedgerEntry {
   customer     Customer  @relation(fields: [customer_id], references: [uuid], onDelete: Cascade)
 }
 
+model SaleItem {
+  uuid          String        @id @default(uuid()) @db.Uuid
+  sale_id       String        @db.Uuid
+  item_id       String?       @db.Uuid
+  part_number   String
+  name          String
+  make          String?
+  qty           Int
+  selling_price Float
+  total         Float
+
+  sale          Sale          @relation(fields: [sale_id], references: [uuid], onDelete: Cascade)
+  item          InventoryItem? @relation(fields: [item_id], references: [uuid], onDelete: SetNull)
+}
+
 model Settings {
   shop_id            ShopName @id
   aed_rate           Float    @default(36.5)
@@ -138,4 +162,7 @@ model AuditLog {
   action      String
   details     String
   ip_address  String?
+
+  @@index([timestamp])
+  @@index([shop_id, timestamp])
 }

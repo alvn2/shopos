@@ -3,7 +3,6 @@ import Layout from '../components/common/Layout';
 import { useInventory } from '../contexts/InventoryContext';
 import { api } from '../services/api';
 import { v4 as uuidv4 } from 'uuid';
-import { Save, Package, AlertCircle, Check, Zap, RefreshCw, ArrowRight, Layers } from 'lucide-react';
 import { Save, Package, AlertCircle, Check, Zap, RefreshCw, ArrowRight, Layers, DollarSign } from 'lucide-react';
 import { PartMake, InventoryItem } from '../types';
 import { useAuth } from '../contexts/AuthContext';

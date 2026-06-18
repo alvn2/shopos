@@ -6,7 +6,6 @@ import { OfflineProvider } from './contexts/OfflineContext';
 import { Toaster } from 'react-hot-toast';
 
 // Lazy-loaded pages for code splitting
-const Landing = lazy(() => import('./pages/Landing'));
 const Login = lazy(() => import('./pages/Login'));
 const Inventory = lazy(() => import('./pages/Inventory'));
 const AddItem = lazy(() => import('./pages/AddItem'));

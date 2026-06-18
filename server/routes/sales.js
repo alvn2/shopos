@@ -43,11 +43,22 @@ router.post('/', async (req, res) => {
                     batch_id,
                     date: saleDate,
                     items_json: JSON.stringify(items || []),
-                    total_price: saleTotal,
+                    total_kes: saleTotal,
                     payment_method: payment_method || 'Cash',
                     customer_name: customer_name || '',
                     notes: notes || '',
-                    sold_by: username
+                    sold_by: username,
+                    items: {
+                        create: (items || []).map(item => ({
+                            item_id: item.uuid || null,
+                            part_number: item.part_number || 'UNKNOWN',
+                            name: item.name || 'Unknown Item',
+                            make: item.make || null,
+                            qty: parseInt(item.qty) || 1,
+                            selling_price: parseFloat(item.selling_price) || 0,
+                            total: (parseInt(item.qty) || 1) * (parseFloat(item.selling_price) || 0)
+                        }))
+                    }
                 }
             });
 
@@ -107,8 +118,12 @@ router.get('/', async (req, res) => {
     try {
         const { shop_id } = req.user;
         const { from, to, payment_method, page, limit } = req.query;
-        const pageNum = parseInt(page) || 1;
-        const limitNum = parseInt(limit) || 0; // 0 means no pagination
+        const pageNum = Math.max(1, parseInt(page) || 1);
+        let limitNum = parseInt(limit);
+
+        // Safety bounds for pagination
+        if (isNaN(limitNum) || limitNum <= 0) limitNum = 50; // Default to 50
+        if (limitNum > 1000) limitNum = 1000; // Cap at 1000 // 0 means no pagination
 
         const where = { shop_id };
 
@@ -124,7 +139,8 @@ router.get('/', async (req, res) => {
 
         const queryOpts = {
             where,
-            orderBy: { date: 'desc' }
+            orderBy: { date: 'desc' },
+            include: { items: true }
         };
 
         const total = await prisma.sale.count({ where });
@@ -140,9 +156,9 @@ router.get('/', async (req, res) => {
         const transformed = sales.map(s => ({
             date: s.date.toISOString(),
             batch_id: s.batch_id,
-            items: JSON.parse(s.items_json || '[]'),
-            total_kes: s.total_price,
-            total_price: s.total_price,
+            items: s.items && s.items.length > 0 ? s.items : JSON.parse(s.items_json || '[]'),
+            total_kes: s.total_kes,
+            total_price: s.total_kes,
             payment_method: s.payment_method,
             customer_name: s.customer_name,
             notes: s.notes,

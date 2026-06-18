@@ -21,14 +21,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   useEffect(() => {
     const initAuth = async () => {
-      const storedSessionId = localStorage.getItem('shopos_session');
-      const storedUser = localStorage.getItem('shopos_user');
+      // Read from IDB (single source of truth)
+      const storedSessionId = await api.auth.getStoredSession();
+      const storedUser = await api.auth.getStoredUser();
 
       if (storedSessionId && storedUser) {
         // Optimistic Load
         try {
-          const user = JSON.parse(storedUser);
-          setState({ session_id: storedSessionId, user, isAuthenticated: true });
+          setState({ session_id: storedSessionId, user: storedUser, isAuthenticated: true });
 
           // Verify Session Validity
           const isValid = await api.auth.verify();
@@ -54,15 +54,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   const handleLocalLogout = () => {
-    localStorage.removeItem('shopos_session');
-    localStorage.removeItem('shopos_user');
+    // api.auth.logout already clears IDB; just reset React state
     setState({ user: null, session_id: null, isAuthenticated: false });
   };
 
   const login = async (shop_id: string, username: string, password: string, device_info: string) => {
+    // api.auth.login stores session + user in IDB
     const response: LoginResponse = await api.auth.login(shop_id, username, password, device_info);
-    localStorage.setItem('shopos_session', response.session_id);
-    localStorage.setItem('shopos_user', JSON.stringify(response.user));
     setState({
       session_id: response.session_id,
       user: response.user,

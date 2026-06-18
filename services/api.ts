@@ -499,6 +499,21 @@ export const api = {
     }
   },
 
+  // ------ AUDIT ------
+  audit: {
+    getLogs: async (params?: any): Promise<any> => {
+      const query = new URLSearchParams();
+      if (params) {
+        Object.entries(params).forEach(([k, v]) => {
+          if (v !== undefined && v !== 'All' && v !== '') query.set(k, String(v));
+        });
+      }
+      return fetchAPI(`/audit?${query.toString()}`);
+    },
+    getUsers: async (): Promise<string[]> => fetchAPI('/audit/users'),
+    getActions: async (): Promise<string[]> => fetchAPI('/audit/actions')
+  },
+
   // ------ REPORTS ------
   reports: {
     getSalesSummary: async (params?: { from?: string; to?: string; paymentMethod?: string }): Promise<any> => {

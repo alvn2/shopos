@@ -27,7 +27,7 @@ router.get('/sales-summary', async (req, res) => {
             }
         });
 
-        const totalSales = sales.reduce((sum, s) => sum + s.total_price, 0);
+        const totalSales = sales.reduce((sum, s) => sum + (s.total_kes || 0), 0);
         const totalTransactions = sales.length;
         const averageTransaction = totalTransactions > 0 ? totalSales / totalTransactions : 0;
 
@@ -48,7 +48,7 @@ router.get('/sales-summary', async (req, res) => {
             if (!chartData[dateStr]) {
                 chartData[dateStr] = 0;
             }
-            chartData[dateStr] += s.total_price;
+            chartData[dateStr] += (s.total_kes || 0);
         });
 
         const chartArray = Object.keys(chartData)
@@ -65,7 +65,7 @@ router.get('/sales-summary', async (req, res) => {
             }
         });
         
-        const prevTotal = prevSales.reduce((sum, s) => sum + s.total_price, 0);
+        const prevTotal = prevSales.reduce((sum, s) => sum + (s.total_kes || 0), 0);
         const growthPercent = prevTotal > 0 ? ((totalSales - prevTotal) / prevTotal) * 100 : 0;
 
         res.json({
@@ -189,13 +189,13 @@ router.get('/profit-analysis', requireAdmin, async (req, res) => {
         const { shop_id } = req.user;
         const { from, to } = req.query;
 
-        // Get settings for AED rate and overhead factor
-        const settingsRecords = await prisma.setting.findMany({ where: { shop_id } });
-        const settings = {};
-        settingsRecords.forEach(s => settings[s.key] = s.value);
+        // Get settings for AED rate and conversion percent
+        const shopSettings = await prisma.settings.findUnique({ where: { shop_id } });
         
-        const aedRate = parseFloat(settings.aed_exchange_rate) || 36.50;
-        const overheadFactor = parseFloat(settings.overhead_factor) || 1.35;
+        const aedRate = shopSettings?.aed_rate || 36.50;
+        const conversionPercent = shopSettings?.conversion_percent || 13.0;
+        // Overhead factor: 1 + (conversion_percent / 100)
+        const overheadFactor = 1 + (conversionPercent / 100);
 
         // Get inventory for cost basis
         const inventory = await prisma.inventoryItem.findMany({ where: { shop_id } });
@@ -222,7 +222,7 @@ router.get('/profit-analysis', requireAdmin, async (req, res) => {
         let totalProfit = 0;
 
         sales.forEach(sale => {
-            totalRevenue += sale.total_price;
+            totalRevenue += (sale.total_kes || 0);
 
             const items = JSON.parse(sale.items_json || '[]');
             items.forEach(item => {

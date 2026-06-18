@@ -7,7 +7,6 @@ const rateLimit = require('express-rate-limit');
 const cron = require('node-cron');
 const { connectDB, disconnectDB } = require('./services/prisma');
 const sessionService = require('./services/session');
-const cache = require('./services/cache'); // Keeping for non-replaced route endpoints if any
 const redisCache = require('./services/redisCache');
 const { logger, requestIdMiddleware, requestLoggerMiddleware, metrics, metricsMiddleware } = require('./services/logger');
 const { requestTimeout, additionalSecurityHeaders, getLockoutStats } = require('./middleware/security');
@@ -38,7 +37,7 @@ const corsOptions = {
         }
 
         // In production, check against allowed origins
-        if (allowedOrigins.some(allowed => origin === allowed || origin.endsWith('.vercel.app'))) {
+        if (allowedOrigins.includes(origin)) {
             return callback(null, true);
         }
 
@@ -120,23 +119,17 @@ app.use('/api/settings', require('./routes/settings'));
 app.use('/api/audit', require('./routes/audit'));
 app.use('/api/customers', require('./routes/customers'));
 
-// Enhanced health check endpoint
+// Health check endpoint (minimal — no sensitive info)
 app.get('/api/health', async (req, res) => {
     try {
         res.json({
             status: 'ok',
             timestamp: new Date().toISOString(),
-            version: process.env.npm_package_version || '1.0.0',
-            environment: process.env.NODE_ENV || 'development',
-            database: 'connected',
-            cache: { type: 'redis', status: redisCache.redisClient ? redisCache.redisClient.status : 'disconnected' }
+            version: process.env.npm_package_version || '1.0.0'
         });
     } catch (error) {
         logger.error('Health check failed', { error });
-        res.status(500).json({
-            status: 'error',
-            error: error.message
-        });
+        res.status(500).json({ status: 'error' });
     }
 });
 
@@ -154,11 +147,11 @@ app.get('/api/live', (req, res) => {
     res.json({ alive: true, timestamp: new Date().toISOString() });
 });
 
-// Metrics endpoint (for monitoring dashboards)
-app.get('/api/metrics', (req, res) => {
+// Metrics endpoint (protected — admin only)
+const { authenticateSession, requireAdmin } = require('./middleware/auth');
+app.get('/api/metrics', authenticateSession, requireAdmin, (req, res) => {
     const metricsData = metrics.getStats();
     const lockoutStats = getLockoutStats();
-    const cacheStats = { type: 'redis', status: redisCache.redisClient ? redisCache.redisClient.status : 'disconnected' };
 
     res.json({
         ...metricsData,
@@ -166,7 +159,6 @@ app.get('/api/metrics', (req, res) => {
             locked_ips: lockoutStats.lockedCount,
             tracked_ips: lockoutStats.totalTracked
         },
-        cache: cacheStats,
         memory: process.memoryUsage(),
         timestamp: new Date().toISOString()
     });
