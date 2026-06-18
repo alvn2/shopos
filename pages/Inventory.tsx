@@ -10,7 +10,7 @@ import { Minus, Plus, Save, RotateCcw, Package, Search, Trash2, Edit2, X, Calcul
 import { api } from '../services/api';
 import { Toaster, toast } from 'react-hot-toast';
 import { Virtuoso } from 'react-virtuoso';
-// Memoized inventory row to prevent unnecessary re-renders
+
 const InventoryRow = memo<{
   item: InventoryItem;
   original: InventoryItem | undefined;
@@ -27,7 +27,6 @@ const InventoryRow = memo<{
 }>(({ item, original, isModified, isAdmin, isWorker, showAED, landedCostKES, profitMargin, onAdjust, onEdit, onDelete, onPrintBarcode }) => (
   <div className={`relative overflow-hidden group card-modern p-5 lg:p-6 transition-all duration-200 ${isModified ? 'border-amber-400 dark:border-amber-500/50 ring-2 ring-amber-500/10' : 'hover:border-brand-300 dark:hover:border-brand-500/50'}`}>
 
-    {/* Item Header */}
     <div className="flex flex-col md:flex-row justify-between items-start gap-3 mb-4">
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 mb-1.5 flex-wrap">
@@ -51,7 +50,6 @@ const InventoryRow = memo<{
         {item.tags && <div className="text-sm font-medium text-slate-500 dark:text-slate-400 mt-1 truncate">{item.tags}</div>}
       </div>
 
-      {/* Action buttons - always visible on mobile */}
         <div className="flex gap-2 shrink-0">
           <button
             onClick={() => onPrintBarcode(item)}
@@ -82,7 +80,6 @@ const InventoryRow = memo<{
     </div>
 
     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-      {/* Pricing Block */}
       <div className="bg-slate-50/80 dark:bg-slate-900/50 rounded-xl p-4 border border-slate-100 dark:border-slate-800/50">
         {isAdmin && (
           <div className="flex items-center justify-between text-sm mb-3 pb-3 border-b border-slate-200 dark:border-slate-700/50">
@@ -113,7 +110,6 @@ const InventoryRow = memo<{
         )}
       </div>
 
-      {/* Stock Controls */}
       <div className="bg-slate-50/80 dark:bg-slate-900/50 rounded-xl p-4 border border-slate-100 dark:border-slate-800/50">
         <div className="flex items-center justify-between mb-3">
           <span className="text-slate-500 dark:text-slate-400 font-semibold uppercase text-xs tracking-widest">Current Stock</span>
@@ -154,10 +150,16 @@ const Inventory: React.FC = () => {
   const { user } = useAuth();
   const isAdmin = user?.role === UserRole.ADMIN;
   const isWorker = user?.role === UserRole.WORKER;
-  const { items, loading, settings, refreshInventory, removeLocalItem } = useInventory();
+  const { settings } = useInventory();
   const showAED = user?.shop_id !== 'CARWORLD';
 
-  const [localItems, setLocalItems] = useState<InventoryItem[]>([]);
+  const [items, setItems] = useState<InventoryItem[]>([]);
+  const [originalItems, setOriginalItems] = useState<Map<string, InventoryItem>>(new Map());
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(true);
+  const [loadingItems, setLoadingItems] = useState(true);
+  const [totalItems, setTotalItems] = useState(0);
+
   const [modifiedIds, setModifiedIds] = useState<Set<string>>(new Set());
   const [saving, setSaving] = useState(false);
   const [filter, setFilter] = useState<'all' | 'low' | 'out'>('all');
@@ -181,43 +183,52 @@ const Inventory: React.FC = () => {
   // Barcode label state
   const [barcodeItem, setBarcodeItem] = useState<InventoryItem | null>(null);
 
-  // Barcode & OCR scan handler
-  const handleBarcodeScan = useCallback((code: string) => {
-    const upperCode = code.toUpperCase();
-    
-    // 1. Try exact barcode match first
-    const exactMatch = items.find(i => i.part_number.toUpperCase() === upperCode);
-    if (exactMatch) {
-      setSearchTerm(exactMatch.part_number);
-      toast.success(`Found: ${exactMatch.name}`);
-      return;
-    }
-
-    // 2. OCR Text processing
-    // Clean up text (remove newlines, extra spaces)
-    const cleanText = code.replace(/\n/g, ' ').replace(/\s+/g, ' ').trim();
-    
-    // Try to find if any word in the OCR text exactly matches a part number
-    const words = cleanText.split(' ').filter(w => w.length >= 3);
-    for (const word of words) {
-      const wordMatch = items.find(i => i.part_number.toUpperCase() === word.toUpperCase());
-      if (wordMatch) {
-        setSearchTerm(wordMatch.part_number);
-        toast.success(`Extracted part number: ${wordMatch.part_number}`);
-        return;
+  const loadItems = useCallback(async (pageNum: number, searchQ: string, filterQ: string, isReset = false) => {
+    setLoadingItems(true);
+    try {
+      const response = await api.inventory.getPaginated(pageNum, 50, searchQ, filterQ !== 'all');
+      
+      let fetchedItems = response.items;
+      if (filterQ === 'out') {
+        fetchedItems = fetchedItems.filter(i => i.stock_qty === 0);
+      } else if (filterQ === 'low') {
+        fetchedItems = fetchedItems.filter(i => i.stock_qty > 0 && i.stock_qty <= i.min_stock);
       }
-    }
 
-    // 3. If no exact part number found, dump the cleaned text into search
-    if (cleanText) {
-      setSearchTerm(cleanText.substring(0, 50));
-      toast.success('Text scanned! Review and edit search.');
-    } else {
-      toast.error('No readable text found');
+      setItems(prev => {
+        const nextItems = isReset ? fetchedItems : [...prev, ...fetchedItems];
+        // Update originalItems map for modified checks
+        const newMap = isReset ? new Map() : new Map(originalItems);
+        fetchedItems.forEach(i => {
+          if (!newMap.has(i.uuid)) newMap.set(i.uuid, i);
+        });
+        setOriginalItems(newMap);
+        return nextItems;
+      });
+      setTotalItems(response.total);
+      setHasMore(pageNum < response.total_pages);
+      setPage(pageNum);
+    } catch (error) {
+      toast.error('Failed to load inventory');
+    } finally {
+      setLoadingItems(false);
     }
-  }, [items]);
+  }, [originalItems]);
 
-  // Debounce search to prevent jank on every keystroke
+  useEffect(() => {
+    loadItems(1, debouncedSearch, filter, true);
+  }, [debouncedSearch, filter]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const loadMore = () => {
+    if (!loadingItems && hasMore) {
+      loadItems(page + 1, debouncedSearch, filter, false);
+    }
+  };
+
+  const handleBarcodeScan = useCallback(async (code: string) => {
+    setSearchTerm(code);
+  }, []);
+
   useEffect(() => {
     const timer = setTimeout(() => {
       startTransition(() => {
@@ -227,20 +238,16 @@ const Inventory: React.FC = () => {
     return () => clearTimeout(timer);
   }, [searchTerm]);
 
-  useEffect(() => {
-    setLocalItems(items);
-  }, [items]);
-
   const calcLandedCost = useCallback((aedPrice: number) =>
     Math.round(aedPrice * aedRate * (1 + conversionPercent / 100)), [aedRate, conversionPercent]);
 
   const handleAdjust = useCallback((uuid: string, delta: number) => {
-    setLocalItems(prev => prev.map(item => {
+    setItems(prev => prev.map(item => {
       if (item.uuid === uuid) {
         const newQty = Math.max(0, item.stock_qty + delta);
         setModifiedIds(prevIds => {
           const next = new Set(prevIds);
-          const original = items.find(i => i.uuid === uuid);
+          const original = originalItems.get(uuid);
           if (newQty !== original?.stock_qty) {
             next.add(uuid);
           } else {
@@ -252,19 +259,19 @@ const Inventory: React.FC = () => {
       }
       return item;
     }));
-  }, [items]);
+  }, [originalItems]);
 
   const handleSave = async () => {
     if (modifiedIds.size === 0) return;
     setSaving(true);
-    const updates = localItems
+    const updates = items
       .filter(item => modifiedIds.has(item.uuid))
       .map(item => ({ uuid: item.uuid, stock_qty: item.stock_qty }));
     try {
       await api.inventory.updateBatch(updates);
       setModifiedIds(new Set());
       toast.success(`${updates.length} item${updates.length > 1 ? 's' : ''} updated`);
-      await refreshInventory();
+      loadItems(1, debouncedSearch, filter, true);
     } catch (e) {
       console.error(e);
       toast.error('Failed to save changes');
@@ -277,21 +284,21 @@ const Inventory: React.FC = () => {
   const [isDeleting, setIsDeleting] = useState(false);
 
   const handleDeleteClick = useCallback((uuid: string) => {
-    const item = localItems.find(i => i.uuid === uuid);
+    const item = items.find(i => i.uuid === uuid);
     if (item) setDeleteItem(item);
-  }, [localItems]);
+  }, [items]);
 
   const confirmDelete = async () => {
     if (!deleteItem) return;
     setIsDeleting(true);
     try {
-      removeLocalItem(deleteItem.uuid);
+      setItems(prev => prev.filter(i => i.uuid !== deleteItem.uuid));
       await api.inventory.delete(deleteItem.uuid);
       toast.success('Item deleted');
       setDeleteItem(null);
     } catch (e: any) {
       toast.error(e?.message || 'Delete failed');
-      refreshInventory();
+      loadItems(1, debouncedSearch, filter, true);
     } finally {
       setIsDeleting(false);
     }
@@ -325,7 +332,7 @@ const Inventory: React.FC = () => {
         min_stock: parseInt(editForm.min_stock) || 5
       });
       toast.success('Item updated');
-      await refreshInventory();
+      loadItems(1, debouncedSearch, filter, true);
       closeEditModal();
     } catch (e) {
       toast.error('Failed to update item');
@@ -334,25 +341,6 @@ const Inventory: React.FC = () => {
     }
   };
 
-  // Filtered + paginated list
-  const filteredList = useMemo(() => {
-    return localItems.filter(item => {
-      if (debouncedSearch) {
-        const s = debouncedSearch.toLowerCase();
-        if (!item.name.toLowerCase().includes(s) && !item.part_number.toLowerCase().includes(s) && !(item.tags || '').toLowerCase().includes(s)) {
-          return false;
-        }
-      }
-      if (filter === 'low') return item.stock_qty > 0 && item.stock_qty <= item.min_stock;
-      if (filter === 'out') return item.stock_qty === 0;
-      return true;
-    });
-  }, [localItems, debouncedSearch, filter]);
-
-  const lowStockCount = items.filter(i => i.stock_qty <= i.min_stock && i.stock_qty > 0).length;
-  const outOfStockCount = items.filter(i => i.stock_qty === 0).length;
-
-  // Edit modal calculations
   const editLandedCost = parseFloat(editForm.aed_buying_price) ? calcLandedCost(parseFloat(editForm.aed_buying_price)) : 0;
   const editSellingPrice = parseFloat(editForm.selling_price) || 0;
   const editProfitMargin = editLandedCost > 0 ? Math.round((editSellingPrice - editLandedCost) / editLandedCost * 100) : 0;
@@ -360,7 +348,6 @@ const Inventory: React.FC = () => {
   return (
     <Layout title="Inventory">
       <div className="p-4 lg:p-8 max-w-6xl mx-auto space-y-6 animate-enter">
-        {/* Rate Info Banner */}
         {isAdmin && (
           <div className="p-4 bg-gradient-to-r from-indigo-50/50 to-cyan-50/50 dark:from-indigo-900/20 dark:to-cyan-900/20 glass-panel rounded-2xl flex items-center gap-4 text-sm text-slate-700 dark:text-slate-300 shadow-sm">
             <div className="w-10 h-10 rounded-full bg-indigo-100 dark:bg-indigo-900/50 flex items-center justify-center shrink-0">
@@ -374,12 +361,11 @@ const Inventory: React.FC = () => {
           </div>
         )}
 
-        {/* Page Header */}
         <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
           <div>
             <h1 className="text-3xl font-extrabold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-slate-900 to-slate-600 dark:from-white dark:to-slate-400">Inventory Management</h1>
             <p className="text-slate-500 dark:text-slate-400 mt-2 font-medium">
-              <span className="text-slate-900 dark:text-white font-bold">{items.length}</span> items • <span className="text-amber-600 dark:text-amber-400 font-bold">{lowStockCount}</span> low stock • <span className="text-rose-600 dark:text-rose-400 font-bold">{outOfStockCount}</span> out of stock
+              <span className="text-slate-900 dark:text-white font-bold">{totalItems}</span> matching items found
             </p>
           </div>
           {!isWorker && (
@@ -396,7 +382,6 @@ const Inventory: React.FC = () => {
           )}
         </div>
 
-        {/* Search & Filters */}
         <div className="sticky top-4 z-30 glass-panel rounded-2xl p-5 border border-slate-200 dark:border-slate-800 space-y-4 shadow-xl shadow-brand-900/5 backdrop-blur-2xl">
           <div className="relative group">
             <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
@@ -426,18 +411,17 @@ const Inventory: React.FC = () => {
             <button onClick={() => startTransition(() => { setFilter('out'); })} className={`flex-1 py-2.5 px-4 rounded-lg text-sm font-semibold transition-all duration-300 ${filter === 'out' ? 'bg-rose-100 text-rose-800 dark:bg-rose-900/40 dark:text-rose-200 shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'}`}>
               Out of Stock
             </button>
-            {isPending && <div className="absolute inset-x-0 bottom-0 h-0.5 bg-brand-500 animate-pulse"></div>}
+            {(isPending || loadingItems) && <div className="absolute inset-x-0 bottom-0 h-0.5 bg-brand-500 animate-pulse"></div>}
           </div>
         </div>
 
-        {/* Inventory List */}
         <div className="space-y-3">
-          {loading && items.length === 0 ? (
+          {loadingItems && items.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-20 text-slate-500">
               <RotateCcw className="animate-spin mb-3" size={32} />
               <p className="font-medium">Loading inventory...</p>
             </div>
-          ) : filteredList.length === 0 ? (
+          ) : items.length === 0 ? (
             <div className="text-center py-20 card-modern p-8">
               <Package size={48} className="mx-auto text-slate-300 dark:text-slate-600 mb-4" />
               <p className="text-lg font-bold text-slate-900 dark:text-slate-100">
@@ -447,10 +431,11 @@ const Inventory: React.FC = () => {
           ) : (
             <Virtuoso
               useWindowScroll
-              data={filteredList}
+              data={items}
+              endReached={loadMore}
               itemContent={(index, item) => {
                 const isModified = modifiedIds.has(item.uuid);
-                const original = items.find(i => i.uuid === item.uuid);
+                const original = originalItems.get(item.uuid);
                 const landedCostKES = calcLandedCost(item.aed_buying_price);
                 const profitMargin = landedCostKES > 0 ? Math.round((item.selling_price - landedCostKES) / landedCostKES * 100) : 0;
 
@@ -475,9 +460,13 @@ const Inventory: React.FC = () => {
               }}
             />
           )}
+          {loadingItems && items.length > 0 && (
+            <div className="py-4 flex justify-center">
+              <RotateCcw className="animate-spin text-slate-400" size={24} />
+            </div>
+          )}
         </div>
 
-        {/* Sticky Save Bar */}
         {modifiedIds.size > 0 && (
           <div className="fixed bottom-24 lg:bottom-10 left-1/2 -translate-x-1/2 lg:w-96 w-[calc(100%-2rem)] p-4 glass-dropdown rounded-2xl z-40 flex items-center justify-between animate-slide-up">
             <div className="text-sm font-medium text-slate-600 dark:text-slate-300">
@@ -485,7 +474,10 @@ const Inventory: React.FC = () => {
             </div>
             <div className="flex gap-3">
               <button
-                onClick={() => { setLocalItems(items); setModifiedIds(new Set()); }}
+                onClick={() => {
+                  setItems(items.map(i => originalItems.has(i.uuid) ? originalItems.get(i.uuid)! : i));
+                  setModifiedIds(new Set());
+                }}
                 className="px-5 py-2.5 text-slate-600 dark:text-slate-300 font-bold hover:bg-slate-100 dark:hover:bg-slate-700 rounded-xl transition-colors"
               >
                 Cancel
@@ -502,10 +494,8 @@ const Inventory: React.FC = () => {
           </div>
         )}
 
-
       </div>
 
-      {/* Edit Item Modal */}
       {editingItem && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
           <div className="card-modern shadow-2xl w-full max-w-md max-h-[90vh] overflow-y-auto animate-slide-up">
@@ -534,7 +524,6 @@ const Inventory: React.FC = () => {
                 <input type="text" value={editForm.make} onChange={e => setEditForm({ ...editForm, make: e.target.value })} className="input-modern" />
               </div>
 
-              {/* Pricing Section */}
               <div className="bg-slate-50 dark:bg-slate-800/50 rounded-xl p-4 space-y-4 border border-slate-200/50 dark:border-slate-700/50">
                 <div className="text-xs font-bold text-slate-600 dark:text-slate-300 flex items-center gap-2 uppercase tracking-wider">
                   <Calculator size={14} />
@@ -553,7 +542,6 @@ const Inventory: React.FC = () => {
                   {showAED && <div className="text-xs text-blue-500 mt-1">= AED {editForm.aed_buying_price || 0} × {aedRate} × (1 + {conversionPercent}%)</div>}
                 </div>
 
-                {/* Landed Cost Display */}
                 <div className="bg-blue-50 dark:bg-blue-900/20 p-3 rounded-lg border border-blue-200/50 dark:border-blue-800/50">
                   <div className="text-xs text-blue-600 dark:text-blue-400 font-semibold">Landed Cost (KES)</div>
                   <div className="text-xl font-bold text-blue-700 dark:text-blue-300">KES {editLandedCost.toLocaleString()}</div>
@@ -594,7 +582,6 @@ const Inventory: React.FC = () => {
         </div>
       )}
 
-      {/* Delete Confirmation Modal */}
       {deleteItem && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/40 dark:bg-black/60 backdrop-blur-sm animate-fade-in">
           <div className="card-modern shadow-2xl w-full max-w-sm animate-slide-up border border-rose-100 dark:border-rose-900/50">
@@ -618,15 +605,13 @@ const Inventory: React.FC = () => {
         </div>
       )}
 
-      {/* Bulk Import Modal */}
       {showBulkImport && (
         <BulkImport
-          onComplete={() => { setShowBulkImport(false); refreshInventory(); }}
+          onComplete={() => { setShowBulkImport(false); loadItems(1, debouncedSearch, filter, true); }}
           onClose={() => setShowBulkImport(false)}
         />
       )}
 
-      {/* Barcode Label Modal */}
       {barcodeItem && (
         <BarcodeLabel
           partNumber={barcodeItem.part_number}

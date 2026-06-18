@@ -9,7 +9,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { toast } from 'react-hot-toast';
 
 const AddItem: React.FC = () => {
-    const { items, addLocalItem, updateLocalItem, settings, refreshInventory } = useInventory();
+    const { settings } = useInventory();
     const { user } = useAuth();
     const showAED = user?.shop_id !== 'CARWORLD';
     const partNumberRef = useRef<HTMLInputElement>(null);
@@ -43,29 +43,41 @@ const AddItem: React.FC = () => {
     // =============================
     // Items are uniquely identified by part_number + make combo.
     // Same part_number can exist as Genuine, Aftermarket, Japan, etc.
-    const existingMatch = useMemo(() => {
-        if (!partNumber.trim()) return null;
-        const normalizedPN = partNumber.trim().replace(/[\s\-\/]/g, '').toUpperCase();
-        const normalizedMake = (make || 'Genuine').trim().toLowerCase();
-        return items.find(item => {
-            const itemPN = item.part_number.replace(/[\s\-\/]/g, '').toUpperCase();
-            const itemMake = (item.make || 'Genuine').trim().toLowerCase();
-            return itemPN === normalizedPN && itemMake === normalizedMake;
-        }) || null;
-    }, [partNumber, make, items]);
+    const [existingMatch, setExistingMatch] = useState<InventoryItem | null>(null);
+    const [otherMakes, setOtherMakes] = useState<InventoryItem[]>([]);
 
-    // Also find other makes with same part number (for info display)
-    const otherMakes = useMemo(() => {
-        if (!partNumber.trim()) return [];
-        const normalizedPN = partNumber.trim().replace(/[\s\-\/]/g, '').toUpperCase();
-        const normalizedMake = (make || 'Genuine').trim().toLowerCase();
-        return items.filter(item => {
-            const itemPN = item.part_number.replace(/[\s\-\/]/g, '').toUpperCase();
-            const itemMake = (item.make || 'Genuine').trim().toLowerCase();
-            return itemPN === normalizedPN && itemMake !== normalizedMake;
-        });
-    }, [partNumber, make, items]);
+    useEffect(() => {
+        if (!partNumber.trim()) {
+            setExistingMatch(null);
+            setOtherMakes([]);
+            return;
+        }
+        const timer = setTimeout(async () => {
+            try {
+                const results = await api.inventory.search(partNumber);
+                const normalizedPN = partNumber.trim().replace(/[\s\-\/]/g, '').toUpperCase();
+                const normalizedMake = (make || 'Genuine').trim().toLowerCase();
 
+                const exact = results.find(item => {
+                    const itemPN = item.part_number.replace(/[\s\-\/]/g, '').toUpperCase();
+                    const itemMake = (item.make || 'Genuine').trim().toLowerCase();
+                    return itemPN === normalizedPN && itemMake === normalizedMake;
+                });
+                setExistingMatch(exact || null);
+
+                const others = results.filter(item => {
+                    const itemPN = item.part_number.replace(/[\s\-\/]/g, '').toUpperCase();
+                    const itemMake = (item.make || 'Genuine').trim().toLowerCase();
+                    return itemPN === normalizedPN && itemMake !== normalizedMake;
+                });
+                setOtherMakes(others);
+
+            } catch (err) {
+                console.error(err);
+            }
+        }, 300);
+        return () => clearTimeout(timer);
+    }, [partNumber, make]);
 
     const resetForm = () => {
         setPartNumber('');
@@ -132,8 +144,6 @@ const AddItem: React.FC = () => {
                     updatedFields.min_stock = parseInt(minStock) || 5;
                 }
 
-                // Optimistic update
-                updateLocalItem(existingMatch.uuid, updatedFields);
 
                 const feedbackParts = [];
                 if (addQty > 0) feedbackParts.push(`+${addQty} stock`);
@@ -175,8 +185,6 @@ const AddItem: React.FC = () => {
                     updated_by: user?.username || 'unknown'
                 };
 
-                // Optimistic update
-                addLocalItem(newItem);
                 setRecentlyAdded(prev => [`Added "${newItem.name}" (${make}) — new item`, ...prev.slice(0, 4)]);
                 resetForm();
 

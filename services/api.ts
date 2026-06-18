@@ -263,17 +263,52 @@ export const api = {
 
   // ------ INVENTORY ------
   inventory: {
-    getAll: async (): Promise<InventoryItem[]> => {
-      const items = await fetchAPI<InventoryItem[]>(
-        '/inventory',
+    getPaginated: async (page = 1, limit = 50, search = '', lowStock = false): Promise<{ items: InventoryItem[], total: number, page: number, total_pages: number }> => {
+      const qs = new URLSearchParams();
+      qs.set('page', page.toString());
+      qs.set('limit', limit.toString());
+      if (search) qs.set('search', search);
+      if (lowStock) qs.set('low_stock', 'true');
+
+      const response = await fetchAPI<any>(
+        `/inventory?${qs.toString()}`,
         {},
-        () => cache.inventory.get()
+        async () => {
+          const cached = await cache.inventory.get();
+          const filtered = search ? cached.filter(i => 
+            i.part_number.toLowerCase().includes(search.toLowerCase()) || 
+            i.name.toLowerCase().includes(search.toLowerCase())
+          ) : cached;
+          return {
+            items: filtered.slice((page - 1) * limit, page * limit),
+            total: filtered.length,
+            page,
+            limit,
+            total_pages: Math.ceil(filtered.length / limit)
+          };
+        }
       );
 
-      if (navigator.onLine) {
-        await cache.inventory.set(items);
+      // Only cache first page or full results if possible
+      if (navigator.onLine && page === 1 && !search) {
+        // We might not want to overwrite the full cache with just 50 items.
+        // For offline-first, a background sync of all items is better.
+        // For now, we won't overwrite the cache here to prevent deleting offline data.
       }
-      return items;
+      return response;
+    },
+
+    search: async (query: string): Promise<InventoryItem[]> => {
+      if (!query.trim()) return [];
+      const response = await fetchAPI<any>(
+        `/inventory?search=${encodeURIComponent(query)}&limit=50`,
+        {},
+        async () => {
+          const cached = await cache.inventory.get();
+          return { items: cached.filter(i => i.part_number.toLowerCase().includes(query.toLowerCase()) || i.name.toLowerCase().includes(query.toLowerCase())) };
+        }
+      );
+      return Array.isArray(response) ? response : response.items;
     },
 
     create: async (item: Omit<InventoryItem, 'last_updated' | 'updated_by'>): Promise<{ success: boolean }> => {

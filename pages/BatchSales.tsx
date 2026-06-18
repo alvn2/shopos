@@ -20,7 +20,7 @@ interface SaleLineItem {
 }
 
 const RecordSale: React.FC = () => {
-  const { items, refreshInventory } = useInventory();
+  const { refreshSettings } = useInventory();
   const { user } = useAuth();
   const showAED = user?.shop_id !== 'CARWORLD';
   const isAdmin = user?.role === UserRole.ADMIN;
@@ -56,15 +56,27 @@ const RecordSale: React.FC = () => {
   const [showCustomerDropdown, setShowCustomerDropdown] = useState(false);
   const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(null);
 
-  // Filter inventory for search
-  const searchResults = useMemo(() => {
-    if (!searchTerm || searchTerm.length < 2) return [];
-    const s = searchTerm.toLowerCase();
-    return items.filter(item =>
-      item.name.toLowerCase().includes(s) ||
-      item.part_number.toLowerCase().includes(s)
-    ).slice(0, 8);
-  }, [searchTerm, items]);
+  const [searchResults, setSearchResults] = useState<InventoryItem[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
+
+  useEffect(() => {
+    if (!searchTerm || searchTerm.length < 2) {
+      setSearchResults([]);
+      return;
+    }
+    const timer = setTimeout(async () => {
+      setIsSearching(true);
+      try {
+        const results = await api.inventory.search(searchTerm);
+        setSearchResults(results.slice(0, 8));
+      } catch (err) {
+        console.error('Search failed', err);
+      } finally {
+        setIsSearching(false);
+      }
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [searchTerm]);
 
   // Calculate totals
   const totals = useMemo(() => {
@@ -105,15 +117,20 @@ const RecordSale: React.FC = () => {
   }, [customerName]);
 
   // Barcode scan handler
-  const handleBarcodeScan = useCallback((code: string) => {
-    const item = items.find(i => i.part_number.toUpperCase() === code.toUpperCase());
-    if (item) {
-      addItem(item);
-      toast.success(`Added: ${item.name}`);
-    } else {
-      toast.error(`Item not found: ${code}`);
+  const handleBarcodeScan = useCallback(async (code: string) => {
+    try {
+      const results = await api.inventory.search(code);
+      const item = results.find(i => i.part_number.toUpperCase() === code.toUpperCase());
+      if (item) {
+        addItem(item);
+        toast.success(`Added: ${item.name}`);
+      } else {
+        toast.error(`Item not found: ${code}`);
+      }
+    } catch (err) {
+      toast.error('Search failed');
     }
-  }, [items]);
+  }, []);
 
   // Add item to sale
   const addItem = (item: InventoryItem) => {
@@ -219,7 +236,8 @@ const RecordSale: React.FC = () => {
         }
       }
 
-      await refreshInventory();
+      // No refreshInventory needed anymore
+
 
       setSuccessMsg(`Sale #${receiptNo} recorded! Total: KES ${finalTotal.toLocaleString()}`);
 
@@ -388,6 +406,11 @@ const RecordSale: React.FC = () => {
                 className="w-full pl-12 pr-4 py-3.5 bg-slate-50/50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-xl text-sm font-medium text-slate-900 dark:text-white placeholder-slate-400 focus:ring-2 focus:ring-brand-500/50 focus:border-brand-500 outline-none transition-all shadow-inner"
               />
 
+              {isSearching && (
+                <div className="absolute right-12 top-1/2 -translate-y-1/2">
+                  <div className="w-5 h-5 border-2 border-brand-500 border-t-transparent rounded-full animate-spin"></div>
+                </div>
+              )}
               {showSearch && searchResults.length > 0 && (
                 <div className="absolute z-30 w-full mt-2 glass-dropdown rounded-2xl overflow-hidden animate-enter origin-top">
                   {searchResults.map(item => (

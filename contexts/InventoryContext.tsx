@@ -4,35 +4,26 @@ import { api } from '../services/api';
 import { useAuth } from './AuthContext';
 
 interface InventoryContextType {
-  items: InventoryItem[];
   loading: boolean;
   settings: Settings | null;
-  refreshInventory: () => Promise<void>;
-  updateLocalItem: (uuid: string, updates: Partial<InventoryItem>) => void;
-  addLocalItem: (item: InventoryItem) => void;
-  removeLocalItem: (uuid: string) => void;
+  refreshSettings: () => Promise<void>;
 }
 
 const InventoryContext = createContext<InventoryContextType | undefined>(undefined);
 
 export const InventoryProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { isAuthenticated } = useAuth();
-  const [items, setItems] = useState<InventoryItem[]>([]);
   const [settings, setSettings] = useState<Settings | null>(null);
   const [loading, setLoading] = useState(false);
 
-  const fetchInventory = useCallback(async () => {
+  const fetchSettings = useCallback(async () => {
     if (!isAuthenticated) return;
     setLoading(true);
     try {
-      const [fetchedItems, fetchedSettings] = await Promise.all([
-        api.inventory.getAll(),
-        api.settings.get()
-      ]);
-      setItems(fetchedItems);
+      const fetchedSettings = await api.settings.get();
       setSettings(fetchedSettings);
     } catch (error) {
-      console.error('Failed to fetch inventory', error);
+      console.error('Failed to fetch settings', error);
     } finally {
       setLoading(false);
     }
@@ -40,26 +31,12 @@ export const InventoryProvider: React.FC<{ children: React.ReactNode }> = ({ chi
 
   useEffect(() => {
     if (isAuthenticated) {
-      fetchInventory();
+      fetchSettings();
     }
-  }, [isAuthenticated, fetchInventory]);
-
-  const updateLocalItem = useCallback((uuid: string, updates: Partial<InventoryItem>) => {
-    setItems(prev => prev.map(item => item.uuid === uuid ? { ...item, ...updates } : item));
-  }, []);
-
-  // Optimistic add - instantly adds item to local state without re-fetching
-  const addLocalItem = useCallback((item: InventoryItem) => {
-    setItems(prev => [item, ...prev]);
-  }, []);
-
-  // Optimistic remove - instantly removes item from local state
-  const removeLocalItem = useCallback((uuid: string) => {
-    setItems(prev => prev.filter(item => item.uuid !== uuid));
-  }, []);
+  }, [isAuthenticated, fetchSettings]);
 
   return (
-    <InventoryContext.Provider value={{ items, loading, settings, refreshInventory: fetchInventory, updateLocalItem, addLocalItem, removeLocalItem }}>
+    <InventoryContext.Provider value={{ loading, settings, refreshSettings: fetchSettings }}>
       {children}
     </InventoryContext.Provider>
   );
