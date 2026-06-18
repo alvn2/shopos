@@ -592,6 +592,19 @@ export const api = {
 
   // ------ SYNC ------
   sync: {
+    syncCache: async (): Promise<void> => {
+      if (!navigator.onLine) return;
+      try {
+        const response = await fetchAPI<any>('/inventory?limit=5000');
+        const items = Array.isArray(response) ? response : response.items;
+        if (items && items.length > 0) {
+          await cache.inventory.set(items);
+        }
+      } catch (e) {
+        console.error('Failed to sync cache:', e);
+      }
+    },
+
     getPendingCount: async (): Promise<number> => await idbSyncQueue.count(),
 
     syncAll: async (): Promise<{ synced: number; failed: number }> => {

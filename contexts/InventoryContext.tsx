@@ -31,7 +31,10 @@ export const InventoryProvider: React.FC<{ children: React.ReactNode }> = ({ chi
 
   useEffect(() => {
     if (isAuthenticated) {
-      fetchSettings();
+      fetchSettings().then(() => {
+        // Run background cache sync for offline support
+        api.sync.syncCache().catch(console.error);
+      });
     }
   }, [isAuthenticated, fetchSettings]);
 
