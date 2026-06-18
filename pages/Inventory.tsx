@@ -53,26 +53,26 @@ const InventoryRow = memo<{
         <div className="flex gap-2 shrink-0">
           <button
             onClick={() => onPrintBarcode(item)}
-            className="p-2.5 bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-violet-100 hover:text-violet-600 dark:hover:bg-violet-900/50 dark:hover:text-violet-400 rounded-lg transition-colors"
+            className="w-12 h-12 flex items-center justify-center bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-violet-100 hover:text-violet-600 dark:hover:bg-violet-900/50 dark:hover:text-violet-400 rounded-xl transition-colors"
             title="Print Barcode"
           >
-            <QrCode size={16} />
+            <QrCode size={18} />
           </button>
           {!isWorker && (
             <>
               <button
                 onClick={() => onEdit(item)}
-                className="p-2.5 bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-brand-100 hover:text-brand-600 dark:hover:bg-brand-900/50 dark:hover:text-brand-400 rounded-lg transition-colors"
+                className="w-12 h-12 flex items-center justify-center bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-brand-100 hover:text-brand-600 dark:hover:bg-brand-900/50 dark:hover:text-brand-400 rounded-xl transition-colors"
                 title="Edit item"
               >
-                <Edit2 size={16} />
+                <Edit2 size={18} />
               </button>
               <button
                 onClick={() => onDelete(item.uuid)}
-                className="p-2.5 bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-rose-100 hover:text-rose-600 dark:hover:bg-rose-900/50 dark:hover:text-rose-400 rounded-lg transition-colors"
+                className="w-12 h-12 flex items-center justify-center bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-rose-100 hover:text-rose-600 dark:hover:bg-rose-900/50 dark:hover:text-rose-400 rounded-xl transition-colors"
                 title="Delete item"
               >
-                <Trash2 size={16} />
+                <Trash2 size={18} />
               </button>
             </>
           )}
@@ -123,18 +123,18 @@ const InventoryRow = memo<{
             {!isWorker && (
               <button
                 onClick={() => onAdjust(item.uuid, -1)}
-                className="w-10 h-10 rounded-lg bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 flex items-center justify-center hover:bg-slate-100 dark:hover:bg-slate-700 active:scale-95 transition-all"
+                className="w-12 h-12 rounded-xl bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 flex items-center justify-center hover:bg-slate-100 dark:hover:bg-slate-700 active:scale-95 transition-all"
               >
-                <Minus size={18} />
+                <Minus size={20} />
               </button>
             )}
             <span className="text-2xl font-black w-14 text-center text-slate-900 dark:text-white font-mono">{item.stock_qty}</span>
             {!isWorker && (
               <button
                 onClick={() => onAdjust(item.uuid, 1)}
-                className="w-10 h-10 rounded-lg bg-brand-500 dark:bg-brand-600 text-white flex items-center justify-center shadow-glow hover:bg-brand-600 dark:hover:bg-brand-500 active:scale-95 transition-all"
+                className="w-12 h-12 rounded-xl bg-brand-500 dark:bg-brand-600 text-white flex items-center justify-center shadow-glow hover:bg-brand-600 dark:hover:bg-brand-500 active:scale-95 transition-all"
               >
-                <Plus size={18} />
+                <Plus size={20} />
               </button>
             )}
           </div>
@@ -341,7 +341,9 @@ const Inventory: React.FC = () => {
     }
   };
 
-  const editLandedCost = parseFloat(editForm.aed_buying_price) ? calcLandedCost(parseFloat(editForm.aed_buying_price)) : 0;
+  const editLandedCost = parseFloat(editForm.aed_buying_price) > 0 
+    ? calcLandedCost(parseFloat(editForm.aed_buying_price)) 
+    : (parseFloat(editForm.ksh_buying_price) || 0);
   const editSellingPrice = parseFloat(editForm.selling_price) || 0;
   const editProfitMargin = editLandedCost > 0 ? Math.round((editSellingPrice - editLandedCost) / editLandedCost * 100) : 0;
 
@@ -436,7 +438,9 @@ const Inventory: React.FC = () => {
               itemContent={(index, item) => {
                 const isModified = modifiedIds.has(item.uuid);
                 const original = originalItems.get(item.uuid);
-                const landedCostKES = calcLandedCost(item.aed_buying_price);
+                const landedCostKES = item.aed_buying_price > 0 
+                  ? calcLandedCost(item.aed_buying_price) 
+                  : (item.ksh_buying_price || 0);
                 const profitMargin = landedCostKES > 0 ? Math.round((item.selling_price - landedCostKES) / landedCostKES * 100) : 0;
 
                 return (

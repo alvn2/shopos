@@ -56,8 +56,8 @@ const Layout: React.FC<LayoutProps> = ({ children, title }) => {
         }`;
 
     const mobileNavClass = ({ isActive }: { isActive: boolean }) =>
-        `flex flex-col items-center justify-center py-2 text-xs font-semibold transition-colors duration-200 ${isActive
-            ? 'text-slate-900 dark:text-white scale-105'
+        `flex flex-col items-center justify-center h-full w-full py-2 text-[10px] uppercase tracking-wide font-bold transition-all duration-200 ${isActive
+            ? 'text-brand-600 dark:text-brand-400 scale-105'
             : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
         }`;
 
@@ -202,9 +202,9 @@ const Layout: React.FC<LayoutProps> = ({ children, title }) => {
                 <div className="flex items-center gap-2">
                     <button
                         onClick={toggleDark}
-                        className="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                        className="w-12 h-12 flex items-center justify-center rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
                     >
-                        {isDark ? <Sun size={18} className="text-slate-400" /> : <Moon size={18} className="text-slate-500" />}
+                        {isDark ? <Sun size={22} className="text-slate-400" /> : <Moon size={22} className="text-slate-500" />}
                     </button>
                 </div>
             </header>
@@ -215,32 +215,32 @@ const Layout: React.FC<LayoutProps> = ({ children, title }) => {
             </main>
 
             {/* ===== MOBILE BOTTOM NAV ===== */}
-            <nav className="lg:hidden fixed bottom-6 left-4 right-4 z-40 glass-dropdown rounded-2xl h-16 border-white/20">
+            <nav className="lg:hidden fixed bottom-6 left-4 right-4 z-40 glass-dropdown rounded-2xl h-[72px] border-white/20">
                 <div className={`grid h-full ${isWorker ? 'grid-cols-4' : 'grid-cols-5'}`}>
                     <NavLink to="/" className={mobileNavClass} end>
-                        <Package size={22} />
-                        <span>Inventory</span>
+                        <Package size={24} />
+                        <span className="mt-1">Inventory</span>
                     </NavLink>
                     {!isWorker && (
                         <NavLink to="/add-item" className={mobileNavClass}>
-                            <Plus size={22} />
-                            <span>Add</span>
+                            <Plus size={24} />
+                            <span className="mt-1">Add</span>
                         </NavLink>
                     )}
                     <NavLink to="/sales" className={mobileNavClass}>
-                        <FileText size={22} />
-                        <span>Record</span>
+                        <FileText size={24} />
+                        <span className="mt-1">Record</span>
                     </NavLink>
                     <NavLink to="/sales-history" className={mobileNavClass}>
-                        <History size={22} />
-                        <span>History</span>
+                        <History size={24} />
+                        <span className="mt-1">History</span>
                     </NavLink>
 
                     <button
                         onClick={() => setUserMenuOpen(!userMenuOpen)} // Reuse userMenuOpen state for mobile menu
-                        className={`flex flex-col items-center justify-center py-2 text-xs font-medium transition-all duration-300 ${userMenuOpen ? 'text-brand-600 dark:text-brand-400 scale-105' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'}`}
+                        className={`flex flex-col items-center justify-center h-full w-full py-2 text-[10px] uppercase tracking-wide font-bold transition-all duration-300 ${userMenuOpen ? 'text-brand-600 dark:text-brand-400 scale-105' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'}`}
                     >
-                        <Settings size={22} />
+                        <Settings size={24} />
                         <span className="mt-1">More</span>
                     </button>
                 </div>

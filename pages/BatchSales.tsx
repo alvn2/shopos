@@ -15,12 +15,15 @@ interface SaleLineItem {
   name: string;
   qty: number;
   buying_price_aed: number;
+  buying_price_ksh: number;
   selling_price: number;
   sold_for: number;
 }
 
 const RecordSale: React.FC = () => {
-  const { refreshSettings } = useInventory();
+  const { settings } = useInventory();
+  const aedRate = settings?.aed_rate || 36.5;
+  const conversionPercent = settings?.conversion_percent || 13;
   const { user } = useAuth();
   const showAED = user?.shop_id !== 'CARWORLD';
   const isAdmin = user?.role === UserRole.ADMIN;
@@ -84,10 +87,13 @@ const RecordSale: React.FC = () => {
     let cost = 0;
     lineItems.forEach(item => {
       revenue += item.sold_for * item.qty;
-      cost += item.buying_price_aed * 36.5 * 1.35 * item.qty;
+      const unitCost = item.buying_price_aed > 0 
+        ? item.buying_price_aed * aedRate * (1 + conversionPercent / 100)
+        : (item.buying_price_ksh || 0);
+      cost += unitCost * item.qty;
     });
     return { revenue, cost, profit: revenue - cost };
-  }, [lineItems]);
+  }, [lineItems, aedRate, conversionPercent]);
 
   // Computed discount
   const discountAmount = useMemo(() => {
@@ -146,6 +152,7 @@ const RecordSale: React.FC = () => {
         name: item.name,
         qty: 1,
         buying_price_aed: item.aed_buying_price,
+        buying_price_ksh: item.ksh_buying_price || 0,
         selling_price: item.selling_price,
         sold_for: item.selling_price
       }]);
@@ -440,8 +447,8 @@ const RecordSale: React.FC = () => {
                 {lineItems.map(item => (
                   <div key={item.uuid} className="bg-white dark:bg-slate-800 rounded-2xl p-4 border border-slate-200 dark:border-slate-700 shadow-sm relative group transition-all hover:shadow-md hover:border-brand-300 dark:hover:border-brand-700 w-full">
                     {/* Item Remove Button (Absolute) */}
-                    <button type="button" onClick={() => removeItem(item.uuid)} className="absolute -right-2 -top-2 w-8 h-8 bg-white dark:bg-slate-700 rounded-full shadow border border-slate-200 dark:border-slate-600 flex items-center justify-center text-rose-500 hover:text-white hover:bg-rose-500 dark:hover:bg-rose-500 transition-all z-10 opacity-0 group-hover:opacity-100 scale-90 group-hover:scale-100">
-                      <X size={14} className="stroke-[3]" />
+                    <button type="button" onClick={() => removeItem(item.uuid)} className="absolute -right-3 -top-3 w-11 h-11 bg-white dark:bg-slate-700 rounded-full shadow border border-slate-200 dark:border-slate-600 flex items-center justify-center text-rose-500 hover:text-white hover:bg-rose-500 dark:hover:bg-rose-500 transition-all z-10 lg:opacity-0 lg:group-hover:opacity-100 opacity-100 scale-100 lg:scale-90 lg:group-hover:scale-100">
+                      <X size={18} className="stroke-[3]" />
                     </button>
 
                     <div className="flex flex-col md:flex-row gap-4 w-full">

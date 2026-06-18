@@ -203,6 +203,7 @@ router.get('/profit-analysis', requireAdmin, async (req, res) => {
         inventory.forEach(item => {
             inventoryMap[item.uuid] = {
                 aed_buying_price: item.aed_buying_price || 0,
+                ksh_buying_price: item.ksh_buying_price || 0,
                 selling_price: item.selling_price || 0
             };
         });
@@ -228,7 +229,9 @@ router.get('/profit-analysis', requireAdmin, async (req, res) => {
             items.forEach(item => {
                 const invItem = inventoryMap[item.uuid];
                 if (invItem) {
-                    const landedCost = invItem.aed_buying_price * aedRate * overheadFactor;
+                    const landedCost = invItem.aed_buying_price > 0 
+                        ? invItem.aed_buying_price * aedRate * overheadFactor 
+                        : (invItem.ksh_buying_price || 0);
                     const unitProfit = (item.unit_price || invItem.selling_price) - landedCost;
                     totalProfit += unitProfit * (item.qty || 0);
                 }
@@ -241,8 +244,11 @@ router.get('/profit-analysis', requireAdmin, async (req, res) => {
         const lossMakingItems = [];
         inventory.forEach(item => {
             const aedCost = item.aed_buying_price || 0;
+            const kshCost = item.ksh_buying_price || 0;
             const sellingPrice = item.selling_price || 0;
-            const landedCost = aedCost * aedRate * overheadFactor;
+            const landedCost = aedCost > 0 
+                ? aedCost * aedRate * overheadFactor 
+                : kshCost;
 
             if (sellingPrice < landedCost && sellingPrice > 0) {
                 lossMakingItems.push({
