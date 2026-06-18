@@ -1,12 +1,10 @@
 import React, { useState, useMemo, useEffect, useCallback, memo, useTransition } from 'react';
 import Layout from '../components/common/Layout';
 import BulkImport from '../components/inventory/BulkImport';
-import BarcodeLabel from '../components/inventory/BarcodeLabel';
-import BarcodeScanner from '../components/common/BarcodeScanner';
 import { useAuth } from '../contexts/AuthContext';
 import { useInventory } from '../contexts/InventoryContext';
 import { InventoryItem, PartMake, UserRole } from '../types';
-import { Minus, Plus, Save, RotateCcw, Package, Search, Trash2, Edit2, X, Calculator, Upload, ChevronLeft, ChevronRight, AlertTriangle, QrCode } from 'lucide-react';
+import { Minus, Plus, Save, RotateCcw, Package, Search, Trash2, Edit2, X, Calculator, Upload, ChevronLeft, ChevronRight, AlertTriangle } from 'lucide-react';
 import { api } from '../services/api';
 import { Toaster, toast } from 'react-hot-toast';
 import { Virtuoso } from 'react-virtuoso';
@@ -23,8 +21,7 @@ const InventoryRow = memo<{
   onAdjust: (uuid: string, delta: number) => void;
   onEdit: (item: InventoryItem) => void;
   onDelete: (uuid: string) => void;
-  onPrintBarcode: (item: InventoryItem) => void;
-}>(({ item, original, isModified, isAdmin, isWorker, showAED, landedCostKES, profitMargin, onAdjust, onEdit, onDelete, onPrintBarcode }) => (
+}>(({ item, original, isModified, isAdmin, isWorker, showAED, landedCostKES, profitMargin, onAdjust, onEdit, onDelete }) => (
   <div className={`relative overflow-hidden group card-modern p-5 lg:p-6 transition-all duration-200 ${isModified ? 'border-amber-400 dark:border-amber-500/50 ring-2 ring-amber-500/10' : 'hover:border-brand-300 dark:hover:border-brand-500/50'}`}>
 
     <div className="flex flex-col md:flex-row justify-between items-start gap-3 mb-4">
@@ -51,13 +48,6 @@ const InventoryRow = memo<{
       </div>
 
         <div className="flex gap-2 shrink-0">
-          <button
-            onClick={() => onPrintBarcode(item)}
-            className="w-12 h-12 flex items-center justify-center bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-violet-100 hover:text-violet-600 dark:hover:bg-violet-900/50 dark:hover:text-violet-400 rounded-xl transition-colors"
-            title="Print Barcode"
-          >
-            <QrCode size={18} />
-          </button>
           {!isWorker && (
             <>
               <button
@@ -180,8 +170,7 @@ const Inventory: React.FC = () => {
   });
   const [editSaving, setEditSaving] = useState(false);
 
-  // Barcode label state
-  const [barcodeItem, setBarcodeItem] = useState<InventoryItem | null>(null);
+
 
   const loadItems = useCallback(async (pageNum: number, searchQ: string, filterQ: string, isReset = false) => {
     setLoadingItems(true);
@@ -224,10 +213,6 @@ const Inventory: React.FC = () => {
       loadItems(page + 1, debouncedSearch, filter, false);
     }
   };
-
-  const handleBarcodeScan = useCallback(async (code: string) => {
-    setSearchTerm(code);
-  }, []);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -372,7 +357,6 @@ const Inventory: React.FC = () => {
           </div>
           {!isWorker && (
             <div className="flex gap-2">
-              <BarcodeScanner onScan={handleBarcodeScan} label="Scan" />
               <button
                 onClick={() => setShowBulkImport(true)}
                 className="btn-secondary flex items-center gap-2"
@@ -613,15 +597,6 @@ const Inventory: React.FC = () => {
         <BulkImport
           onComplete={() => { setShowBulkImport(false); loadItems(1, debouncedSearch, filter, true); }}
           onClose={() => setShowBulkImport(false)}
-        />
-      )}
-
-      {barcodeItem && (
-        <BarcodeLabel
-          partNumber={barcodeItem.part_number}
-          name={barcodeItem.name}
-          sellingPrice={barcodeItem.selling_price}
-          onClose={() => setBarcodeItem(null)}
         />
       )}
     </Layout>

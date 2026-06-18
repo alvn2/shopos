@@ -144,6 +144,7 @@ router.post('/', requireAdmin, validate('inventoryItem', 'body'), async (req, re
             where: {
                 shop_id,
                 part_number: { equals: partNumberUpper, mode: 'insensitive' },
+                name: { equals: name.trim(), mode: 'insensitive' },
                 make: { equals: make, mode: 'insensitive' },
                 is_deleted: false
             }
@@ -344,18 +345,19 @@ router.post('/bulk-import', requireAdmin, async (req, res) => {
             const existingRecords = await tx.inventoryItem.findMany({
                 where: { shop_id, part_number: { in: partNumbers } }
             });
-            const existingMap = new Map(existingRecords.map(r => [r.part_number, r]));
+            const existingMap = new Map(existingRecords.map(r => [`${r.part_number}-${r.name}-${r.make}`, r]));
 
             const newItems = [];
             const updatePromises = [];
 
             for (const item of validItems) {
-                const existing = existingMap.get(item.part_number);
+                const key = `${item.part_number}-${item.name}-${item.make}`;
+                const existing = existingMap.get(key);
 
                 if (existing) {
                     updatePromises.push(
                         tx.inventoryItem.update({
-                            where: { shop_id_part_number: { shop_id, part_number: item.part_number } },
+                            where: { uuid: existing.uuid },
                             data: {
                                 name: item.name,
                                 make: item.make,

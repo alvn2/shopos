@@ -42,7 +42,8 @@ router.get('/', async (req, res) => {
         const result = {
             aed_rate: settings.aed_rate,
             conversion_percent: settings.conversion_percent,
-            default_min_stock: settings.default_min_stock
+            default_min_stock: settings.default_min_stock,
+            default_markup_percent: settings.default_markup_percent
         };
 
         await redisCache.setCache(cacheKey, result, SETTINGS_CACHE_TTL / 1000);
@@ -65,19 +66,22 @@ router.put('/', requireAdmin, async (req, res) => {
         const aed_rate = updates.aed_rate ? parseFloat(updates.aed_rate) : undefined;
         const conversion_percent = updates.conversion_percent ? parseFloat(updates.conversion_percent) : undefined;
         const default_min_stock = updates.default_min_stock ? parseInt(updates.default_min_stock) : undefined;
+        const default_markup_percent = updates.default_markup_percent !== undefined ? parseFloat(updates.default_markup_percent) : undefined;
 
         const updatedSettings = await prisma.settings.upsert({
             where: { shop_id },
             update: {
                 ...(aed_rate !== undefined && { aed_rate }),
                 ...(conversion_percent !== undefined && { conversion_percent }),
-                ...(default_min_stock !== undefined && { default_min_stock })
+                ...(default_min_stock !== undefined && { default_min_stock }),
+                ...(default_markup_percent !== undefined && { default_markup_percent })
             },
             create: {
                 shop_id,
                 aed_rate: aed_rate !== undefined ? aed_rate : 36.5,
                 conversion_percent: conversion_percent !== undefined ? conversion_percent : 13.0,
-                default_min_stock: default_min_stock !== undefined ? default_min_stock : 5
+                default_min_stock: default_min_stock !== undefined ? default_min_stock : 5,
+                default_markup_percent: default_markup_percent !== undefined ? default_markup_percent : 200.0
             }
         });
 
@@ -94,7 +98,8 @@ router.put('/', requireAdmin, async (req, res) => {
         const result = {
             aed_rate: updatedSettings.aed_rate,
             conversion_percent: updatedSettings.conversion_percent,
-            default_min_stock: updatedSettings.default_min_stock
+            default_min_stock: updatedSettings.default_min_stock,
+            default_markup_percent: updatedSettings.default_markup_percent
         };
 
         await redisCache.clearCache(`settings:${shop_id}`);

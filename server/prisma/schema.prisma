@@ -67,7 +67,7 @@ model InventoryItem {
   deleted_at       DateTime?
   deleted_by       String?
 
-  @@unique([shop_id, part_number])
+  @@unique([shop_id, part_number, name, make])
   @@index([part_number])
   @@index([name])
   @@index([tags])
@@ -147,11 +147,12 @@ model SaleItem {
 }
 
 model Settings {
-  shop_id            ShopName @id
-  aed_rate           Float    @default(36.5)
-  conversion_percent Float    @default(13.0)
-  default_min_stock  Int      @default(5)
-  updated_at         DateTime @default(now()) @updatedAt
+  shop_id                ShopName @id
+  aed_rate               Float    @default(36.5)
+  conversion_percent     Float    @default(13.0)
+  default_min_stock      Int      @default(5)
+  default_markup_percent Float    @default(200.0)
+  updated_at             DateTime @default(now()) @updatedAt
 }
 
 model AuditLog {

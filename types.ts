@@ -90,6 +90,7 @@ export interface Settings {
   aed_rate: number;           // KES per 1 AED (e.g., 36.5)
   conversion_percent: number; // Import/overhead percentage (e.g., 13)
   default_min_stock: number;
+  default_markup_percent: number; // Markup percentage (e.g., 200)
 }
 
 export interface LoginResponse {

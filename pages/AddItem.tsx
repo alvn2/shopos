@@ -24,11 +24,22 @@ const AddItem: React.FC = () => {
     const [sellingPrice, setSellingPrice] = useState('');
     const [stockQty, setStockQty] = useState('');
     const [minStock, setMinStock] = useState('5');
+    const [isSellingPriceEdited, setIsSellingPriceEdited] = useState(false);
 
     // UI state
     const [submitting, setSubmitting] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [recentlyAdded, setRecentlyAdded] = useState<string[]>([]);
+
+    // Auto-clear recently added messages
+    useEffect(() => {
+        if (recentlyAdded.length > 0) {
+            const timer = setTimeout(() => {
+                setRecentlyAdded(prev => prev.slice(0, prev.length - 1));
+            }, 4000);
+            return () => clearTimeout(timer);
+        }
+    }, [recentlyAdded]);
 
     // Auto-focus on mount
     useEffect(() => {
@@ -89,6 +100,8 @@ const AddItem: React.FC = () => {
         setSellingPrice('');
         setStockQty('');
         setMinStock('5');
+        setIsSellingPriceEdited(false);
+        setError(null);
     };
 
     const handleSubmit = async (e: React.FormEvent, continueAdding = false) => {
@@ -220,6 +233,17 @@ const AddItem: React.FC = () => {
     const estimatedLandedCost = showAED && aedBuyingPrice ? parseFloat(aedBuyingPrice) * aedRate * (1 + conversionPercent / 100) : (kshBuyingPrice ? parseFloat(kshBuyingPrice) : 0);
     const estimatedProfit = sellingPrice ? parseFloat(sellingPrice) - estimatedLandedCost : 0;
     const marginPercent = sellingPrice && estimatedLandedCost ? ((estimatedProfit / parseFloat(sellingPrice)) * 100) : 0;
+
+    useEffect(() => {
+        if (!isSellingPriceEdited) {
+            const markup = settings?.default_markup_percent ?? 200;
+            if (estimatedLandedCost > 0) {
+                setSellingPrice(Math.round(estimatedLandedCost * (1 + markup / 100)).toString());
+            } else {
+                setSellingPrice('');
+            }
+        }
+    }, [estimatedLandedCost, isSellingPriceEdited, settings]);
 
     return (
         <Layout title="Add Item">
@@ -404,11 +428,6 @@ const AddItem: React.FC = () => {
                                             const val = e.target.value;
                                             setAedBuyingPrice(val);
                                             setKshBuyingPrice(''); // Clear direct KSH if AED is entered
-                                            // Auto-calc selling price if not set
-                                            if (val && !sellingPrice) {
-                                                const cost = parseFloat(val) * aedRate * (1 + conversionPercent / 100);
-                                                setSellingPrice(Math.ceil(cost * 1.2 / 50) * 50 + ""); // 20% markup, round to 50
-                                            }
                                         }}
                                         className="input-modern"
                                         placeholder={existingMatch ? `Current: ${existingMatch.aed_buying_price}` : '0.00'}
@@ -432,17 +451,7 @@ const AddItem: React.FC = () => {
                                     min="0"
                                     value={kshBuyingPrice}
                                     onChange={e => {
-                                        const val = e.target.value;
-                                        setKshBuyingPrice(val);
-                                        if (!sellingPrice) {
-                                            let cost = 0;
-                                            if (val && parseFloat(val) > 0) {
-                                                cost = parseFloat(val);
-                                            } else if (aedBuyingPrice && parseFloat(aedBuyingPrice) > 0) {
-                                                cost = parseFloat(aedBuyingPrice) * aedRate * (1 + conversionPercent / 100);
-                                            }
-                                            if (cost > 0) setSellingPrice((cost * 1.5).toFixed(0));
-                                        }
+                                        setKshBuyingPrice(e.target.value);
                                     }}
                                     placeholder={existingMatch ? `Current: ${existingMatch.ksh_buying_price || 0}` : '0'}
                                     className="input-modern"
@@ -459,7 +468,10 @@ const AddItem: React.FC = () => {
                                     step="1"
                                     min="0"
                                     value={sellingPrice}
-                                    onChange={e => setSellingPrice(e.target.value)}
+                                    onChange={e => {
+                                        setSellingPrice(e.target.value);
+                                        setIsSellingPriceEdited(true);
+                                    }}
                                     placeholder={existingMatch ? `Current: ${existingMatch.selling_price}` : '0'}
                                     className="input-modern"
                                     required

@@ -22,6 +22,7 @@ const SettingsPage: React.FC = () => {
   const [aedRate, setAedRate] = useState('36.5');
   const [conversionPercent, setConversionPercent] = useState('13');
   const [defaultMinStock, setDefaultMinStock] = useState('5');
+  const [defaultMarkupPercent, setDefaultMarkupPercent] = useState('200');
 
   // Calculator state
   const [calcAed, setCalcAed] = useState('100');
@@ -51,6 +52,7 @@ const SettingsPage: React.FC = () => {
       setAedRate(s.aed_rate.toString());
       setConversionPercent(s.conversion_percent.toString());
       setDefaultMinStock(s.default_min_stock.toString());
+      setDefaultMarkupPercent(s.default_markup_percent.toString());
     } catch (e) {
       console.error(e);
     } finally {
@@ -73,7 +75,8 @@ const SettingsPage: React.FC = () => {
       await api.settings.update({
         aed_rate: parseFloat(aedRate) || 36.5,
         conversion_percent: parseFloat(conversionPercent) || 13,
-        default_min_stock: parseInt(defaultMinStock) || 5
+        default_min_stock: parseInt(defaultMinStock) || 5,
+        default_markup_percent: parseFloat(defaultMarkupPercent) || 200
       });
       toast.success('Settings saved successfully!');
     } catch (e) {
@@ -212,7 +215,12 @@ const SettingsPage: React.FC = () => {
 
             {/* Rate Settings */}
             <div className="card-modern p-5 lg:p-6 space-y-5">
-              <h3 className="font-bold text-lg text-slate-900 dark:text-white">Conversion Rates</h3>
+              <h3 className="font-bold text-lg text-slate-900 dark:text-white">Global Settings</h3>
+
+              <div className="space-y-1.5">
+                <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider pl-1">Default Selling Markup (%)</label>
+                <input type="number" value={defaultMarkupPercent} onChange={e => setDefaultMarkupPercent(e.target.value)} className="input-modern" />
+              </div>
 
               <div className="space-y-1.5">
                 <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider pl-1">Default Min Stock Alert</label>

@@ -2,11 +2,10 @@ import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import Layout from '../components/common/Layout';
 import { useInventory } from '../contexts/InventoryContext';
 import { InventoryItem } from '../types';
-import { Plus, Trash2, Search, FileText, Calendar, Hash, X, Check, AlertCircle, Percent, CreditCard, Camera } from 'lucide-react';
+import { Plus, Trash2, Search, FileText, Calendar, Hash, X, Check, AlertCircle, Percent, CreditCard } from 'lucide-react';
 import { api } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
 import { UserRole } from '../types';
-import BarcodeScanner from '../components/common/BarcodeScanner';
 import { toast } from 'react-hot-toast';
 
 interface SaleLineItem {
@@ -55,9 +54,17 @@ const RecordSale: React.FC = () => {
   const [secondaryMethod, setSecondaryMethod] = useState<'Cash' | 'M-Pesa' | 'Credit'>('M-Pesa');
 
   // Customer Auto-suggest
-  const [customerResults, setCustomerResults] = useState<any[]>([]);
+  const [customerResults, setCustomerResults] = useState<Customer[]>([]);
   const [showCustomerDropdown, setShowCustomerDropdown] = useState(false);
   const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(null);
+
+  // Auto-clear success message
+  useEffect(() => {
+    if (successMsg) {
+      const timer = setTimeout(() => setSuccessMsg(null), 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [successMsg]);
 
   const [searchResults, setSearchResults] = useState<InventoryItem[]>([]);
   const [isSearching, setIsSearching] = useState(false);
@@ -122,21 +129,6 @@ const RecordSale: React.FC = () => {
     return () => clearTimeout(timeout);
   }, [customerName]);
 
-  // Barcode scan handler
-  const handleBarcodeScan = useCallback(async (code: string) => {
-    try {
-      const results = await api.inventory.search(code);
-      const item = results.find(i => i.part_number.toUpperCase() === code.toUpperCase());
-      if (item) {
-        addItem(item);
-        toast.success(`Added: ${item.name}`);
-      } else {
-        toast.error(`Item not found: ${code}`);
-      }
-    } catch (err) {
-      toast.error('Search failed');
-    }
-  }, []);
 
   // Add item to sale
   const addItem = (item: InventoryItem) => {
@@ -396,7 +388,6 @@ const RecordSale: React.FC = () => {
                 Items Sold
               </h3>
               <div className="flex items-center gap-2">
-                <BarcodeScanner onScan={handleBarcodeScan} label="Scan" />
                 <span className="text-xs font-bold text-slate-400 bg-slate-100 dark:bg-slate-800 px-3 py-1 rounded-full">{lineItems.length} items</span>
               </div>
             </div>
