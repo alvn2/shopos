@@ -16,8 +16,8 @@ const LowStock: React.FC = () => {
     const fetchLowStock = async () => {
         setLoading(true);
         try {
-            const res = await api.inventory.getPaginated(1, 2000, '', true);
-            setItems(res.items);
+            const res = await api.inventory.getPaginated(1, 2000, '', true) as any;
+            setItems(Array.isArray(res) ? res : (res.items || []));
         } catch (err) {
             toast.error('Failed to load low stock items');
         } finally {

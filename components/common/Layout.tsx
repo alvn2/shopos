@@ -215,8 +215,8 @@ const Layout: React.FC<LayoutProps> = ({ children, title }) => {
             </main>
 
             {/* ===== MOBILE BOTTOM NAV ===== */}
-            <nav className="lg:hidden fixed bottom-6 left-4 right-4 z-40 glass-dropdown rounded-2xl h-[72px] border-white/20">
-                <div className={`grid h-full ${isWorker ? 'grid-cols-4' : 'grid-cols-5'}`}>
+            <nav className="lg:hidden fixed bottom-6 left-6 right-6 sm:left-12 sm:right-12 z-40 bg-white/70 dark:bg-slate-900/70 backdrop-blur-2xl border border-white/40 dark:border-slate-700/50 shadow-xl rounded-full h-[72px] flex items-center justify-between px-2">
+                <div className={`grid h-full w-full ${isWorker ? 'grid-cols-4' : 'grid-cols-5'}`}>
                     <NavLink to="/" className={mobileNavClass} end>
                         <Package size={24} />
                         <span className="mt-1">Inventory</span>

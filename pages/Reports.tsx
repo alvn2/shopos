@@ -126,8 +126,8 @@ const Reports: React.FC = () => {
             </div>
           </div>
 
-          <div className="h-72 w-full">
-            <ResponsiveContainer width="100%" height="100%">
+          <div className="h-72 w-full min-w-[0px]">
+            <ResponsiveContainer width="100%" height="100%" minWidth={0}>
               <BarChart data={salesData}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
                 <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#94a3b8' }} dy={10} />
